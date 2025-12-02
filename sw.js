@@ -6,7 +6,7 @@ const PRECACHE_URLS = [
   './styles.css',
   './manifest.webmanifest',
   './icon.svg',
-  './dist/newModel.js'
+  './dist/main.js'
 ];
 
 self.addEventListener('install', (event) => {
