@@ -318,11 +318,13 @@
     </div>
   </div>
   <script type="module" src="./dist/main.js"></script>
-  <div id="swUpdateToast" class="sw-toast" aria-live="polite" style="display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:20px; z-index:100;">
-    <div style="background:#111; color:#fff; padding:10px 14px; border-radius:8px; display:flex; gap:10px; align-items:center; box-shadow:0 6px 18px rgba(0,0,0,0.35);">
-      <span id="swUpdateText">Nowa wersja dostępna</span>
-      <button id="swUpdateBtn" class="tool icon-btn" style="background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.12); padding:6px 8px; border-radius:6px;">Zastosuj</button>
-      <button id="swDismissBtn" class="tool icon-btn" style="background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.06); padding:6px 8px; border-radius:6px;">Później</button>
+  <div id="swUpdateToast" class="sw-toast" aria-live="polite" style="display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:20px; z-index:100; width:min(420px, 92vw);">
+    <div class="sw-toast__inner">
+      <span id="swUpdateText" class="sw-toast__message">Nowa wersja dostępna</span>
+      <div class="sw-toast__actions">
+        <button id="swUpdateBtn" class="sw-toast__button">Zastosuj</button>
+        <button id="swDismissBtn" class="sw-toast__button sw-toast__button--ghost">Później</button>
+      </div>
     </div>
   </div>
   <script>
