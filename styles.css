@@ -1,3 +1,10 @@
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+}
+
 .theme-default {
   /* --bg: #0f172a; */
   --bg: #2d2f35;
@@ -21,11 +28,36 @@
   --shadow: rgba(0,0,0,0.0);
 }
 * { box-sizing: border-box; padding: 0; margin: 0; }
-body, html { width: 100%; height: 100%; background: var(--bg); color: var(--text); font-family: "Segoe UI", sans-serif; }
+body, html { width: 100%; min-height: 100%; background: var(--bg); color: var(--text); font-family: "Segoe UI", sans-serif; }
 button, input, label { font: inherit; }
-.app { display: flex; flex-direction: column; height: 100vh; }
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
 .toolbar { padding: 8px 12px; background: var(--panel); backdrop-filter: blur(4px); border-bottom: 1px solid var(--panel-border); position: relative; z-index: 10; width: 100%; box-shadow: 0 4px 12px var(--shadow); }
 .toolbar-bare { background: transparent; border: none; box-shadow: none; }
+.toolbar-top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  padding-top: calc(8px + var(--safe-area-top));
+  padding-left: calc(12px + var(--safe-area-left));
+  padding-right: calc(12px + var(--safe-area-right));
+}
+.toolbar-bottom {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding-bottom: calc(8px + var(--safe-area-bottom));
+  padding-left: calc(12px + var(--safe-area-left));
+  padding-right: calc(12px + var(--safe-area-right));
+}
 .tool-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 button { background: var(--btn); color: var(--text); border: 1px solid var(--btn-border); padding: 6px 8px; border-radius: 6px; cursor: pointer; }
 button:hover { background: var(--btn-hover); }

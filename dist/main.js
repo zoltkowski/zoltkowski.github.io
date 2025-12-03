@@ -1003,7 +1003,7 @@ function handleCanvasClick(ev) {
         // ensure previous circle highlight is cleared when placing a new point
         selectedCircleIndex = null;
         const lineHits = findLineHits({ x, y });
-        const circleHits = findCircles({ x, y });
+        const circleHits = findCircles({ x, y }, HIT_RADIUS, false);
         let desiredPos = { x, y };
         const lineAnchors = lineHits
             .map((h) => ({ hit: h, anchors: lineAnchorForHit(h), line: model.lines[h.line] }))
