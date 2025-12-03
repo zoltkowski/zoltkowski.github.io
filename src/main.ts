@@ -415,36 +415,60 @@ type Mode =
 const dpr = window.devicePixelRatio || 1;
 const HIT_RADIUS = 16;
 const HANDLE_SIZE = 16;
-const THEME = {
-  defaultStroke: '#15a3ff',
-  highlight: '#fbbf24',
-  preview: '#22c55e'
+const DEFAULT_COLORS_DARK = ['#15a3ff', '#ff4d4f', '#22c55e', '#f59e0b', '#a855f7', '#0ea5e9'];
+const DEFAULT_COLORS_LIGHT = ['#000000', '#404040', '#808080', '#bfbfbf'];
+type ThemeName = 'dark' | 'light';
+type ThemeConfig = {
+  palette: readonly string[];
+  defaultStroke: string;
+  highlight: string;
+  preview: string;
+  pointSize: number;
+  lineWidth: number;
+  angleStrokeWidth: number;
+  angleDefaultRadius: number;
+  midpointColor: string;
 };
-type ThemeName = 'default' | 'eink';
-let currentTheme: ThemeName = 'default';
+
+const THEME_PRESETS: Record<ThemeName, ThemeConfig> = {
+  dark: {
+    palette: DEFAULT_COLORS_DARK,
+    defaultStroke: DEFAULT_COLORS_DARK[0],
+    highlight: '#fbbf24',
+    preview: '#22c55e',
+    pointSize: 2,
+    lineWidth: 2,
+    angleStrokeWidth: 2,
+    angleDefaultRadius: 28,
+    midpointColor: '#9ca3af'
+  },
+  light: {
+    palette: DEFAULT_COLORS_LIGHT,
+    defaultStroke: DEFAULT_COLORS_LIGHT[0],
+    highlight: '#555555',
+    preview: DEFAULT_COLORS_LIGHT[0],
+    pointSize: 2,
+    lineWidth: 2,
+    angleStrokeWidth: 2,
+    angleDefaultRadius: 28,
+    midpointColor: '#737373'
+  }
+};
+
+const THEME: ThemeConfig = { ...THEME_PRESETS.dark };
+let currentTheme: ThemeName = 'dark';
 const THEME_STORAGE_KEY = 'geometry.theme';
+
+const normalizeThemeName = (value: string | null | undefined): ThemeName | null => {
+  if (value === 'dark' || value === 'light') return value;
+  if (value === 'default') return 'dark';
+  if (value === 'eink') return 'light';
+  return null;
+};
 if (typeof window !== 'undefined') {
   try {
-    const storedTheme = window.localStorage?.getItem(THEME_STORAGE_KEY) as ThemeName | null | undefined;
-    if (storedTheme === 'default' || storedTheme === 'eink') {
-      currentTheme = storedTheme;
-      if (typeof document !== 'undefined') {
-        const root = document.documentElement;
-        root.classList.remove('theme-default', 'theme-eink');
-        root.classList.add(`theme-${storedTheme}`);
-        const bodyEl = document.body;
-        if (bodyEl) {
-          bodyEl.classList.remove('theme-default', 'theme-eink');
-          bodyEl.classList.add(`theme-${storedTheme}`);
-        }
-        const darkBtn = document.getElementById('themeDefault') as HTMLButtonElement | null;
-        const lightBtn = document.getElementById('themeEink') as HTMLButtonElement | null;
-        darkBtn?.setAttribute('aria-pressed', storedTheme === 'default' ? 'true' : 'false');
-        lightBtn?.setAttribute('aria-pressed', storedTheme === 'eink' ? 'true' : 'false');
-        darkBtn?.classList.toggle('active', storedTheme === 'default');
-        lightBtn?.classList.toggle('active', storedTheme === 'eink');
-      }
-    }
+    const storedTheme = normalizeThemeName(window.localStorage?.getItem(THEME_STORAGE_KEY));
+    if (storedTheme) currentTheme = storedTheme;
   } catch {
     // ignore storage access issues
   }
@@ -592,7 +616,7 @@ let clearAllBtn: HTMLButtonElement | null = null;
 let exportJsonBtn: HTMLButtonElement | null = null;
 let importJsonBtn: HTMLButtonElement | null = null;
 let importJsonInput: HTMLInputElement | null = null;
-let themeDefaultBtn: HTMLButtonElement | null = null;
+let themeDarkBtn: HTMLButtonElement | null = null;
 let undoBtn: HTMLButtonElement | null = null;
 let redoBtn: HTMLButtonElement | null = null;
 let styleMenuBtn: HTMLButtonElement | null = null;
@@ -620,15 +644,16 @@ let colorSwatchButtons: HTMLButtonElement[] = [];
 let customColorBtn: HTMLButtonElement | null = null;
 let styleWidthButtons: HTMLButtonElement[] = [];
 let styleTypeButtons: HTMLButtonElement[] = [];
-const DEFAULT_COLORS_DEFAULT = ['#15a3ff', '#ff4d4f', '#22c55e', '#f59e0b', '#a855f7', '#0ea5e9'];
-const DEFAULT_COLORS_EINK = ['#000000', '#404040', '#808080', '#bfbfbf'];
-let recentColors: string[] = [...DEFAULT_COLORS_DEFAULT.slice(0, 1)];
+let recentColors: string[] = [THEME.defaultStroke];
 let labelUpperIdx = 0;
 let labelLowerIdx = 0;
 let labelGreekIdx = 0;
 let freeUpperIdx: number[] = [];
 let freeLowerIdx: number[] = [];
 let freeGreekIdx: number[] = [];
+if (typeof document !== 'undefined') {
+  setTheme(currentTheme);
+}
 let pendingParallelPoint: number | null = null;
 let pendingParallelLine: number | null = null;
 let pendingCircleRadiusPoint: number | null = null;
@@ -813,21 +838,21 @@ const parallelRecomputeStack = new Set<number>();
 const perpendicularRecomputeStack = new Set<number>();
 
 function currentPointStyle(): PointStyle {
-  return { color: THEME.defaultStroke, size: 2 };
+  return { color: THEME.defaultStroke, size: THEME.pointSize };
 }
 
 function midpointPointStyle(): PointStyle {
-  return { color: '#9ca3af', size: 2 };
+  return { color: THEME.midpointColor, size: THEME.pointSize };
 }
 
 function symmetricPointStyle(): PointStyle {
-  return { color: THEME.defaultStroke, size: 2 };
+  return { color: THEME.defaultStroke, size: THEME.pointSize };
 }
 
 function currentStrokeStyle(): StrokeStyle {
   return {
     color: THEME.defaultStroke,
-    width: 2,
+    width: THEME.lineWidth,
     type: 'solid'
   };
 }
@@ -835,7 +860,7 @@ function currentStrokeStyle(): StrokeStyle {
 function currentAngleStyle(): AngleStyle {
   const s: StrokeStyle = {
     color: THEME.defaultStroke,
-    width: 2,
+    width: THEME.angleStrokeWidth,
     type: 'solid'
   };
   return { ...s, fill: undefined, arcCount: 1, right: false, arcRadiusOffset: 0 };
@@ -2770,7 +2795,7 @@ function initRuntime() {
   importJsonBtn = document.getElementById('importJsonBtn') as HTMLButtonElement | null;
   importJsonInput = document.getElementById('importJsonInput') as HTMLInputElement | null;
   clearAllBtn = document.getElementById('clearAll') as HTMLButtonElement | null;
-  themeDefaultBtn = document.getElementById('themeDefault') as HTMLButtonElement | null;
+  themeDarkBtn = document.getElementById('themeDark') as HTMLButtonElement | null;
   undoBtn = document.getElementById('undo') as HTMLButtonElement | null;
   redoBtn = document.getElementById('redo') as HTMLButtonElement | null;
   styleMenuContainer = document.getElementById('styleMenuContainer') as HTMLElement | null;
@@ -2797,6 +2822,9 @@ function initRuntime() {
   styleWidthButtons = Array.from(document.querySelectorAll('.width-btn')) as HTMLButtonElement[];
   styleTypeButtons = Array.from(document.querySelectorAll('.type-btn')) as HTMLButtonElement[];
   strokeColorInput = styleColorInput;
+  if (strokeColorInput) {
+    strokeColorInput.value = THEME.defaultStroke;
+  }
   debugToggleBtn?.addEventListener('click', () => {
     debugVisible = !debugVisible;
     renderDebugPanel();
@@ -3545,8 +3573,8 @@ function initRuntime() {
   document.getElementById('rayRightOption')?.addEventListener('click', () => setRayMode('right'));
   document.getElementById('rayLeftOption')?.addEventListener('click', () => setRayMode('left'));
   document.getElementById('raySegmentOption')?.addEventListener('click', () => setRayMode('segment'));
-  themeDefaultBtn?.addEventListener('click', () => {
-    const nextTheme: ThemeName = currentTheme === 'default' ? 'eink' : 'default';
+  themeDarkBtn?.addEventListener('click', () => {
+    const nextTheme: ThemeName = currentTheme === 'dark' ? 'light' : 'dark';
     setTheme(nextTheme);
   });
   hideBtn?.addEventListener('click', () => {
@@ -4845,10 +4873,10 @@ function updateOptionButtons() {
     showHiddenBtn.classList.toggle('active', showHidden);
     showHiddenBtn.innerHTML = showHidden ? ICONS.eyeOff : ICONS.eye;
   }
-  if (themeDefaultBtn) {
-    const isDark = currentTheme === 'default';
-    themeDefaultBtn.classList.toggle('active', isDark);
-    themeDefaultBtn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+  if (themeDarkBtn) {
+    const isDark = currentTheme === 'dark';
+    themeDarkBtn.classList.toggle('active', isDark);
+    themeDarkBtn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
   }
 }
 
@@ -4870,12 +4898,18 @@ function paletteColors(): string[] {
   recentColors.forEach((c) => {
     if (!palette.some((p) => normalizeColor(p) === normalizeColor(c))) palette.push(c);
   });
-  const baseColors = currentTheme === 'eink' ? DEFAULT_COLORS_EINK : DEFAULT_COLORS_DEFAULT;
-  baseColors.forEach((c) => {
-    if (palette.length < 5 && !palette.some((p) => normalizeColor(p) === normalizeColor(c))) palette.push(c);
-  });
-  while (palette.length < 5) {
-    palette.push(baseColors[palette.length % baseColors.length]);
+  const baseColors = THEME.palette;
+  if (baseColors.length) {
+    baseColors.forEach((c) => {
+      if (palette.length < 5 && !palette.some((p) => normalizeColor(p) === normalizeColor(c))) palette.push(c);
+    });
+    while (palette.length < 5) {
+      palette.push(baseColors[palette.length % baseColors.length]);
+    }
+  } else {
+    while (palette.length < 5) {
+      palette.push(THEME.defaultStroke);
+    }
   }
   return palette.slice(0, 5);
 }
@@ -4886,9 +4920,7 @@ function updateColorButtons() {
   const currentColor = colorInput.value;
   const palette = paletteColors();
   colorSwatchButtons.forEach((btn, idx) => {
-    const fallbackColor =
-      currentTheme === 'eink' ? DEFAULT_COLORS_EINK[0] : DEFAULT_COLORS_DEFAULT[0];
-    const color = palette[idx] ?? fallbackColor;
+    const color = palette[idx] ?? THEME.defaultStroke;
     btn.dataset.color = color;
     btn.style.background = color;
     btn.classList.remove('active');
@@ -4956,7 +4988,7 @@ function updateStyleMenuValues() {
     if (preferPoints) {
       const ptIdx = line.points[0];
       const pt = ptIdx !== undefined ? model.points[ptIdx] : null;
-      const base = pt ?? { style: { color: style.color, size: 2 } as PointStyle };
+      const base = pt ?? { style: { color: style.color, size: THEME.pointSize } as PointStyle };
       styleColorInput.value = base.style.color;
       styleWidthInput.value = String(base.style.size);
       styleTypeSelect.value = 'solid';
@@ -5035,7 +5067,7 @@ function updateStyleMenuValues() {
     const line = model.lines[selectedLineIndex];
     const firstPt = line?.points[0];
     const pt = firstPt !== undefined ? model.points[firstPt] : null;
-    const base = pt ?? { style: { color: styleColorInput.value, size: 2 } as PointStyle };
+    const base = pt ?? { style: { color: styleColorInput.value, size: THEME.pointSize } as PointStyle };
     styleColorInput.value = base.style.color;
     styleWidthInput.value = String(base.style.size);
     styleTypeSelect.value = 'solid';
@@ -5044,7 +5076,7 @@ function updateStyleMenuValues() {
   } else if (preferPoints && selectedPolygonIndex !== null) {
     const verts = polygonVerticesOrdered(selectedPolygonIndex);
     const firstPt = verts[0] !== undefined ? model.points[verts[0]] : null;
-    const base = firstPt ?? { style: { color: styleColorInput.value, size: 2 } as PointStyle };
+    const base = firstPt ?? { style: { color: styleColorInput.value, size: THEME.pointSize } as PointStyle };
     styleColorInput.value = base.style.color;
     styleWidthInput.value = String(base.style.size);
     styleTypeSelect.value = 'solid';
@@ -5094,21 +5126,17 @@ function setTheme(theme: ThemeName) {
   currentTheme = theme;
   const body = document.body;
   const root = document.documentElement;
-  body.classList.remove('theme-default', 'theme-eink');
-  root.classList.remove('theme-default', 'theme-eink');
-  const baseColors = theme === 'eink' ? DEFAULT_COLORS_EINK : DEFAULT_COLORS_DEFAULT;
-  if (theme === 'eink') {
-    body.classList.add('theme-eink');
-    root.classList.add('theme-eink');
-    THEME.defaultStroke = baseColors[0];
-    THEME.highlight = '#555555';
-    THEME.preview = baseColors[0];
+  body?.classList.remove('theme-dark', 'theme-light');
+  root?.classList.remove('theme-dark', 'theme-light');
+  const config = THEME_PRESETS[theme];
+  Object.assign(THEME, config);
+  const palette = config.palette;
+  if (theme === 'light') {
+    body?.classList.add('theme-light');
+    root?.classList.add('theme-light');
   } else {
-    body.classList.add('theme-default');
-    root.classList.add('theme-default');
-    THEME.defaultStroke = baseColors[0];
-    THEME.highlight = '#fbbf24';
-    THEME.preview = '#22c55e';
+    body?.classList.add('theme-dark');
+    root?.classList.add('theme-dark');
   }
   if (typeof window !== 'undefined') {
     try {
@@ -5117,8 +5145,10 @@ function setTheme(theme: ThemeName) {
       // ignore storage failures
     }
   }
-  if (strokeColorInput) strokeColorInput.value = baseColors[0];
-  recentColors = [...baseColors.slice(0, 1)];
+  HIGHLIGHT_LINE.color = THEME.highlight;
+  if (strokeColorInput) strokeColorInput.value = palette[0] ?? THEME.defaultStroke;
+  if (styleWidthInput) styleWidthInput.value = String(THEME.lineWidth);
+  recentColors = palette.length ? [palette[0]] : [THEME.defaultStroke];
   updateOptionButtons();
   updateColorButtons();
   draw();
@@ -6211,7 +6241,7 @@ function applyPersistedDocument(raw: unknown) {
   closeViewMenu();
   closeRayMenu();
   setMode('move');
-  const theme = doc.theme ?? 'default';
+  const theme = normalizeThemeName(doc.theme ?? null) ?? 'dark';
   setTheme(theme);
   if (Array.isArray(doc.recentColors) && doc.recentColors.length > 0) {
     recentColors = doc.recentColors.map((c) => String(c)).slice(0, 20);
@@ -7384,42 +7414,24 @@ function renderDebugPanel() {
   const sections: string[] = [];
   const fmtList = (items: string[]) => (items.length ? items.join(', ') : '');
   const setPart = (ids: string[], joiner = ', ') => (ids.length ? ids.map(friendlyLabelForId).join(joiner) : '');
-  const fmtPoint = (p: Point) => {
-    const parents = setPart(p.defining_parents);
-    const kindInfo =
-      p.construction_kind !== 'free' && p.construction_kind !== 'intersection' ? ` <span style="color:#9ca3af;">${p.construction_kind}</span>` : '';
-    const parentsInfo = parents ? ` [${parents}]` : '';
+  const palette = paletteColors();
+  const fmtPoint = (p: Point, idx: number) => {
     const coords = ` <span style="color:#9ca3af;">(${p.x.toFixed(1)}, ${p.y.toFixed(1)})</span>`;
-    const highlightedSelf = `<span style="color:#ef4444;">${friendlyLabelForId(p.id)}</span>`;
-    if (isMidpointPoint(p)) {
-      const [paId, pbId] = p.midpoint.parents;
-      const list = [
-        paId ? friendlyLabelForId(paId) : null,
-        highlightedSelf,
-        pbId ? friendlyLabelForId(pbId) : null
-      ].filter(Boolean) as string[];
-      const lineTail = p.midpoint.parentLineId
-        ? ` <span style="color:#9ca3af;">∈ ${friendlyLabelForId(p.midpoint.parentLineId)}</span>`
-        : '';
-      return `${friendlyLabelForId(p.id)} [${list.join(', ')}]${lineTail}${coords}`;
-    }
-    if (isSymmetricPoint(p)) {
-      const sourceLabel = friendlyLabelForId(p.symmetric.source);
-      const mirrorLabel = friendlyLabelForId(p.symmetric.mirror.id);
-      const list = [sourceLabel, mirrorLabel, highlightedSelf];
-      return `${friendlyLabelForId(p.id)} [${list.join(', ')}]${coords}`;
-    }
-    if (p.construction_kind === 'intersection' && p.parent_refs.length === 2) {
-      const pr = p.parent_refs.map((pr) => friendlyLabelForId(pr.id));
-      return `${friendlyLabelForId(p.id)} ∈ ${pr.join(' ∩ ')}${coords}`;
-    }
-    if (p.construction_kind === 'on_object' && parents) {
-      return `${friendlyLabelForId(p.id)} ∈ ${parents}${coords}`;
-    }
-    return `${friendlyLabelForId(p.id)}${parentsInfo}${kindInfo}${coords}`;
+    const parentLabels = (p.parent_refs ?? []).map((pr) => friendlyLabelForId(pr.id));
+    const parentsInfo = parentLabels.length
+      ? ` <span style="color:#9ca3af;">${parentLabels.join(', ')}</span>`
+      : '';
+    const kindInfo = p.construction_kind
+      ? ` <span style="color:#9ca3af;">${p.construction_kind}</span>`
+      : '';
+    const highlight = selectedPointIndex === idx ? ' <span style="color:#fbbf24;">★</span>' : '';
+    const hiddenInfo = p.style.hidden ? ' <span style="color:#ef4444;">hidden</span>' : '';
+    const color = palette[idx % palette.length] ?? THEME.defaultStroke;
+    const swatch = `<span style="display:inline-block;width:0.65em;height:0.65em;border-radius:50%;margin-right:4px;background:${color};border:1px solid rgba(17,24,39,0.2);"></span>`;
+    return `${swatch}<strong>${friendlyLabelForId(p.id)}</strong>${highlight}${parentsInfo}${kindInfo}${coords}${hiddenInfo}`;
   };
 
-  const ptRows = model.points.map((p) => fmtPoint(p));
+  const ptRows = model.points.map((p, idx) => fmtPoint(p, idx));
   if (ptRows.length) {
     sections.push(
       `<div style="margin-bottom:8px;"><div style="font-weight:600;">Punkty (${ptRows.length})</div><div>${ptRows
