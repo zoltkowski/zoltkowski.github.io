@@ -64,6 +64,10 @@ button:hover { background: var(--btn-hover); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 button.tool.active { background: #2563eb; border-color: #2563eb; color: #e5e7eb; }
 button.tool.sticky { background: #dc2626; border-color: #dc2626; color: #e5e7eb; }
+button.tool.limit,
+.icon-btn.limit { background: #991b1b; border-color: #b91c1c; color: #fee2e2; }
+.icon-btn.limit:disabled,
+button.tool.limit:disabled { opacity: 1; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; white-space: nowrap; }
 .icon-btn { width: 44px; height: 44px; padding: 0; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--btn); border: 1px solid var(--btn-border); transition: background 120ms ease, transform 120ms ease, border-color 120ms ease; color: var(--text); }
 .icon-btn:hover { background: var(--btn-hover); transform: translateY(-1px); }

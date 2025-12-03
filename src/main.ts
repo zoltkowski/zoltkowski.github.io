@@ -63,6 +63,14 @@ const LINE_SNAP_BLEND_STRENGTH = 0.25;
 const LINE_SNAP_FULL_THRESHOLD = 0.9;
 const LINE_SNAP_INDICATOR_THRESHOLD = LINE_SNAP_FULL_THRESHOLD;
 const ANGLE_RADIUS_STEP = 8;
+const ANGLE_DEFAULT_RADIUS = 28;
+const ANGLE_MIN_RADIUS = 10;
+const ANGLE_RADIUS_MARGIN = 6;
+const ANGLE_RADIUS_EPSILON = 0.5;
+const RIGHT_ANGLE_MARK_MIN = 14;
+const RIGHT_ANGLE_MARK_RATIO = 0.65;
+const RIGHT_ANGLE_MARK_MAX = 72;
+const RIGHT_ANGLE_MARK_MARGIN = 4;
 
 function axisSnapWeight(closeness: number) {
   if (closeness >= LINE_SNAP_FULL_THRESHOLD) return 1;
@@ -1144,13 +1152,23 @@ function draw() {
     const drawRightMark = () => {
       const p1 = ang.vertex === l1.points[leg1.seg] ? b : a;
       const p2 = ang.vertex === l2.points[leg2.seg] ? d : c;
+      const legLen1 = Math.hypot(p1.x - v.x, p1.y - v.y);
+      const legLen2 = Math.hypot(p2.x - v.x, p2.y - v.y);
+      const usable = Math.max(0, Math.min(legLen1, legLen2) - RIGHT_ANGLE_MARK_MARGIN);
+      if (usable <= 0) return;
       const u1 = normalize({ x: p1.x - v.x, y: p1.y - v.y });
       const u2 = normalize({ x: p2.x - v.x, y: p2.y - v.y });
-      const size =
-        Math.max(8, Math.min(Math.hypot(p1.x - v.x, p1.y - v.y), Math.hypot(p2.x - v.x, p2.y - v.y)) * 0.25) / 3;
+      let size: number;
+      if (usable < RIGHT_ANGLE_MARK_MIN) {
+        size = usable;
+      } else {
+        const growth = Math.max(0, r - RIGHT_ANGLE_MARK_MIN) * RIGHT_ANGLE_MARK_RATIO;
+        size = RIGHT_ANGLE_MARK_MIN + growth;
+        size = Math.min(size, RIGHT_ANGLE_MARK_MAX, usable);
+      }
       const pA = { x: v.x + u1.x * size, y: v.y + u1.y * size };
-      const pB = { x: pA.x + u2.x * size, y: pA.y + u2.y * size };
       const pC = { x: v.x + u2.x * size, y: v.y + u2.y * size };
+      const pB = { x: pA.x + u2.x * size, y: pA.y + u2.y * size };
       ctx!.beginPath();
       ctx!.moveTo(v.x, v.y);
       ctx!.lineTo(pA.x, pA.y);
@@ -4102,18 +4120,22 @@ function angleBaseGeometry(ang: Angle) {
     ccw = (end - start + Math.PI * 2) % (Math.PI * 2);
   }
   const clockwise = false;
-  const r = Math.max(
-    10,
-    Math.min(Math.hypot(p1.x - v.x, p1.y - v.y), Math.hypot(p2.x - v.x, p2.y - v.y)) * 0.27
-  );
-  return { v, p1, p2, start, end, span: ccw, clockwise, radius: r };
+  const legLen1 = Math.hypot(p1.x - v.x, p1.y - v.y);
+  const legLen2 = Math.hypot(p2.x - v.x, p2.y - v.y);
+  const legLimit = Math.max(4, Math.min(legLen1, legLen2) - ANGLE_RADIUS_MARGIN);
+  const maxRadius = Math.max(4, legLimit);
+  const minRadius = Math.max(4, Math.min(maxRadius, ANGLE_MIN_RADIUS));
+  let radius = Math.min(ANGLE_DEFAULT_RADIUS, maxRadius);
+  radius = clamp(radius, minRadius, maxRadius);
+  return { v, p1, p2, start, end, span: ccw, clockwise, radius, minRadius, maxRadius };
 }
 
 function angleGeometry(ang: Angle) {
   const base = angleBaseGeometry(ang);
   if (!base) return null;
   const offset = ang.style.arcRadiusOffset ?? 0;
-  const radius = Math.max(4, base.radius + offset);
+  const rawRadius = base.radius + offset;
+  const radius = clamp(rawRadius, base.minRadius, base.maxRadius);
   return { ...base, radius, style: ang.style };
 }
 
@@ -4125,10 +4147,15 @@ function defaultAngleRadius(ang: Angle): number | null {
 function adjustSelectedAngleRadius(direction: 1 | -1) {
   if (selectedAngleIndex === null) return;
   const ang = model.angles[selectedAngleIndex];
-  const base = defaultAngleRadius(ang);
-  if (base === null) return;
+  const base = angleBaseGeometry(ang);
+  if (!base) return;
   const currentOffset = ang.style.arcRadiusOffset ?? 0;
-  const nextOffset = currentOffset + direction * ANGLE_RADIUS_STEP;
+  const desiredRadius = clamp(base.radius + currentOffset + direction * ANGLE_RADIUS_STEP, base.minRadius, base.maxRadius);
+  const nextOffset = desiredRadius - base.radius;
+  if (Math.abs(nextOffset - currentOffset) < 1e-6) {
+    updateStyleMenuValues();
+    return;
+  }
   model.angles[selectedAngleIndex] = { ...ang, style: { ...ang.style, arcRadiusOffset: nextOffset } };
   draw();
   pushHistory();
@@ -4667,10 +4694,12 @@ function updateStyleMenuValues() {
   if (angleRadiusIncreaseBtn) {
     angleRadiusIncreaseBtn.disabled = true;
     angleRadiusIncreaseBtn.classList.remove('active');
+    angleRadiusIncreaseBtn.classList.remove('limit');
   }
   if (angleRadiusDecreaseBtn) {
     angleRadiusDecreaseBtn.disabled = true;
     angleRadiusDecreaseBtn.classList.remove('active');
+    angleRadiusDecreaseBtn.classList.remove('limit');
   }
   const labelEditing = selectedLabel !== null;
   const polygonLines =
@@ -4761,16 +4790,25 @@ function updateStyleMenuValues() {
       rightAngleBtn.classList.toggle('active', !!style.right);
       if (style.right) arcCountButtons.forEach((b) => b.classList.remove('active'));
     }
-    const baseRadius = defaultAngleRadius(ang);
+    const baseGeom = angleBaseGeometry(ang);
+    const actualGeom = angleGeometry(ang);
     const offset = style.arcRadiusOffset ?? 0;
-    const hasRadius = baseRadius !== null;
+    const hasRadius = !!(baseGeom && actualGeom);
+    let atMin = false;
+    let atMax = false;
+    if (baseGeom && actualGeom) {
+      atMin = actualGeom.radius <= baseGeom.minRadius + ANGLE_RADIUS_EPSILON;
+      atMax = actualGeom.radius >= baseGeom.maxRadius - ANGLE_RADIUS_EPSILON;
+    }
     if (angleRadiusIncreaseBtn) {
-      angleRadiusIncreaseBtn.disabled = !hasRadius;
+      angleRadiusIncreaseBtn.disabled = !hasRadius || atMax;
       angleRadiusIncreaseBtn.classList.toggle('active', offset > 0);
+      angleRadiusIncreaseBtn.classList.toggle('limit', hasRadius && atMax);
     }
     if (angleRadiusDecreaseBtn) {
-      angleRadiusDecreaseBtn.disabled = !hasRadius;
+      angleRadiusDecreaseBtn.disabled = !hasRadius || atMin;
       angleRadiusDecreaseBtn.classList.toggle('active', offset < 0);
+      angleRadiusDecreaseBtn.classList.toggle('limit', hasRadius && atMin);
     }
   } else if (selectedPointIndex !== null) {
     const pt = model.points[selectedPointIndex];
