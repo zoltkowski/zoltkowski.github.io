@@ -498,6 +498,22 @@ let panStart = { x: 0, y: 0 };
 let panOffset = { x: 0, y: 0 };
 let panStartOffset = { x: 0, y: 0 };
 let pendingPanCandidate: { x: number; y: number } | null = null;
+let zoomFactor = 1;
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 4;
+type TouchPoint = { x: number; y: number };
+const activeTouches = new Map<number, TouchPoint>();
+type PinchState = {
+  pointerIds: [number, number];
+  initialDistance: number;
+  initialZoom: number;
+};
+let pinchState: PinchState | null = null;
+type CircleDragContext = {
+  circleIdx: number;
+  originals: Map<number, { x: number; y: number }>;
+};
+let circleDragContext: CircleDragContext | null = null;
 let draggingSelection = false;
 let dragStart = { x: 0, y: 0 };
 type ResizeContext = {
@@ -636,6 +652,7 @@ const ICONS = {
 type Snapshot = {
   model: Model;
   panOffset: { x: number; y: number };
+  zoom: number;
 };
 
 const PERSIST_VERSION = 1;
@@ -742,6 +759,7 @@ type PersistedDocument = {
   version: number;
   model: PersistedModel;
   panOffset: { x: number; y: number };
+  zoom?: number;
   labelState: PersistedLabelState;
   theme: ThemeName;
   recentColors: string[];
@@ -873,7 +891,7 @@ function draw() {
   if (!canvas || !ctx) return;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.setTransform(dpr, 0, 0, dpr, panOffset.x * dpr, panOffset.y * dpr);
+  ctx.setTransform(dpr * zoomFactor, 0, 0, dpr * zoomFactor, panOffset.x * dpr, panOffset.y * dpr);
 
   // draw lines
   model.lines.forEach((line, lineIdx) => {
@@ -1000,7 +1018,9 @@ function draw() {
       ctx!.save();
       ctx!.fillStyle = THEME.preview;
       const size = HANDLE_SIZE;
-      ctx!.fillRect(handle.x - size / 2, handle.y - size / 2, size, size);
+      ctx!.translate(handle.x, handle.y);
+      ctx!.scale(1 / zoomFactor, 1 / zoomFactor);
+      ctx!.fillRect(-size / 2, -size / 2, size, size);
       ctx!.restore();
     }
     if (line.label && !line.label.hidden) {
@@ -1017,30 +1037,34 @@ function draw() {
       if (extent) {
         const strength = Math.max(0, Math.min(1, activeAxisSnap.strength));
         const indicatorRadius = 11;
+        const gap = 4;
+        const offsetAmount = screenUnits(indicatorRadius * 2 + gap);
         const offset =
           activeAxisSnap.axis === 'horizontal'
-            ? { x: 0, y: -(indicatorRadius * 2 + 4) }
-            : { x: -(indicatorRadius * 2 + 4), y: 0 };
+            ? { x: 0, y: -offsetAmount }
+            : { x: -offsetAmount, y: 0 };
         const pos = { x: extent.center.x + offset.x, y: extent.center.y + offset.y };
         ctx!.save();
+        ctx!.translate(pos.x, pos.y);
+        ctx!.scale(1 / zoomFactor, 1 / zoomFactor);
         ctx!.textAlign = 'center';
         ctx!.textBaseline = 'middle';
         ctx!.globalAlpha = 0.25 + strength * 0.35;
         ctx!.fillStyle = THEME.preview;
         ctx!.beginPath();
-        ctx!.arc(pos.x, pos.y, indicatorRadius, 0, Math.PI * 2);
+        ctx!.arc(0, 0, indicatorRadius, 0, Math.PI * 2);
         ctx!.fill();
         ctx!.globalAlpha = Math.min(0.6 + strength * 0.4, 0.95);
         ctx!.strokeStyle = THEME.preview;
         ctx!.lineWidth = renderWidth(1.4);
         ctx!.beginPath();
-        ctx!.arc(pos.x, pos.y, indicatorRadius, 0, Math.PI * 2);
+        ctx!.arc(0, 0, indicatorRadius, 0, Math.PI * 2);
         ctx!.stroke();
         ctx!.globalAlpha = 1;
         ctx!.font = `${11}px sans-serif`;
         ctx!.fillStyle = '#0f172a';
         const tag = activeAxisSnap.axis === 'horizontal' ? 'H' : 'V';
-        ctx!.fillText(tag, pos.x, pos.y);
+        ctx!.fillText(tag, 0, 0);
         ctx!.restore();
       }
     }
@@ -1095,7 +1119,7 @@ function draw() {
         selectedCircleIndex === ci && (selectedArcSegments.size === 0 || selectedArcSegments.has(key));
       if (isSelected) {
         ctx!.strokeStyle = HIGHLIGHT_LINE.color;
-        ctx!.lineWidth = style.width + HIGHLIGHT_LINE.width;
+        ctx!.lineWidth = renderWidth(style.width + HIGHLIGHT_LINE.width);
         ctx!.setLineDash(HIGHLIGHT_LINE.dash);
         ctx!.beginPath();
         ctx!.arc(center.x, center.y, arc.radius, arc.start, arc.end, arc.clockwise);
@@ -1208,9 +1232,13 @@ function draw() {
     ctx!.globalAlpha = pointHidden && showHidden ? 0.4 : 1;
     ctx!.fillStyle = p.style.color;
     const r = pointRadius(p.style.size);
+    ctx!.save();
+    ctx!.translate(p.x, p.y);
+    ctx!.scale(1 / zoomFactor, 1 / zoomFactor);
     ctx!.beginPath();
-    ctx!.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx!.arc(0, 0, r, 0, Math.PI * 2);
     ctx!.fill();
+    ctx!.restore();
     if (p.label && !p.label.hidden) {
       if (!p.label.offset) p.label.offset = defaultPointLabelOffset(idx);
       const off = p.label.offset ?? { x: 8, y: -8 };
@@ -1232,11 +1260,15 @@ function draw() {
         (selectedPolygonIndex !== null && selectionVertices && polygonHasPoint(idx, model.polygons[selectedPolygonIndex]))) &&
       (!p.style.hidden || showHidden)
     ) {
+      ctx!.save();
+      ctx!.translate(p.x, p.y);
+      ctx!.scale(1 / zoomFactor, 1 / zoomFactor);
       ctx!.strokeStyle = highlightColor;
       ctx!.lineWidth = 2;
       ctx!.beginPath();
-      ctx!.arc(p.x, p.y, r + 4, 0, Math.PI * 2);
+      ctx!.arc(0, 0, r + 4, 0, Math.PI * 2);
       ctx!.stroke();
+      ctx!.restore();
     }
     ctx!.restore();
   });
@@ -1294,8 +1326,22 @@ function setMode(next: Mode) {
 
 function handleCanvasClick(ev: PointerEvent) {
   if (!canvas) return;
+  if (ev.pointerType === 'touch') {
+    updateTouchPointFromEvent(ev);
+    try {
+      canvas!.setPointerCapture(ev.pointerId);
+    } catch (_) {
+      /* ignore capture errors */
+    }
+    if (activeTouches.size >= 2) {
+      if (!pinchState) startPinchFromTouches();
+      ev.preventDefault();
+      return;
+    }
+  }
   const { x, y } = toPoint(ev);
   draggingCircleCenterAngles = null;
+  circleDragContext = null;
   if (mode === 'move') {
     const labelHit = findLabelAt({ x, y });
     if (labelHit) {
@@ -1403,7 +1449,7 @@ function handleCanvasClick(ev: PointerEvent) {
     // ensure previous circle highlight is cleared when placing a new point
     selectedCircleIndex = null;
     const lineHits = findLineHits({ x, y });
-    const circleHits = findCircles({ x, y }, HIT_RADIUS, false);
+    const circleHits = findCircles({ x, y }, currentHitRadius(), false);
     let desiredPos: { x: number; y: number } = { x, y };
 
     const lineAnchors = lineHits
@@ -1580,8 +1626,9 @@ function handleCanvasClick(ev: PointerEvent) {
         const bIdx = line.points[line.points.length - 1];
         const a = model.points[aIdx];
         const b = model.points[bIdx];
-        if (a && Math.hypot(a.x - x, a.y - y) <= HIT_RADIUS) hitPoint = aIdx;
-        else if (b && Math.hypot(b.x - x, b.y - y) <= HIT_RADIUS) hitPoint = bIdx;
+        const tol = currentHitRadius();
+        if (a && Math.hypot(a.x - x, a.y - y) <= tol) hitPoint = aIdx;
+        else if (b && Math.hypot(b.x - x, b.y - y) <= tol) hitPoint = bIdx;
       }
     }
     if (hitPoint !== null) {
@@ -1970,7 +2017,11 @@ function handleCanvasClick(ev: PointerEvent) {
       return;
     }
     const style = currentStrokeStyle();
-    if (idx === firstIdx || Math.hypot(model.points[firstIdx].x - model.points[idx].x, model.points[firstIdx].y - model.points[idx].y) <= HIT_RADIUS) {
+    const tol = currentHitRadius();
+    if (
+      idx === firstIdx ||
+      Math.hypot(model.points[firstIdx].x - model.points[idx].x, model.points[firstIdx].y - model.points[idx].y) <= tol
+    ) {
       const closingLine = addLineFromPoints(model, lastIdx, firstIdx, style);
       currentPolygonLines.push(closingLine);
       const polyId = nextId('polygon', model);
@@ -2068,7 +2119,7 @@ function handleCanvasClick(ev: PointerEvent) {
   } else if (mode === 'label') {
     const pointHit = findPoint({ x, y });
     const lineHit = findLine({ x, y });
-    const angleHit = findAngleAt({ x, y }, HIT_RADIUS * 1.5);
+    const angleHit = findAngleAt({ x, y }, currentHitRadius(1.5));
     const polyHit = lineHit ? polygonForLine(lineHit.line) : selectedPolygonIndex;
     const color = styleColorInput?.value || '#000';
     let consumed = false;
@@ -2410,9 +2461,9 @@ function handleCanvasClick(ev: PointerEvent) {
   } else if (mode === 'move') {
     const pointHit = findPoint({ x, y });
     const lineHit = findLine({ x, y });
-    let circleHit = findCircle({ x, y }, HIT_RADIUS, false);
-    let arcHit = findArcAt({ x, y }, HIT_RADIUS * 1.5);
-    const angleHit = findAngleAt({ x, y }, HIT_RADIUS * 1.5);
+    let circleHit = findCircle({ x, y }, currentHitRadius(), false);
+    let arcHit = findArcAt({ x, y }, currentHitRadius(1.5));
+    const angleHit = findAngleAt({ x, y }, currentHitRadius(1.5));
     let fallbackCircleIdx: number | null = null;
     let circleFallback = false;
     if (pointHit !== null) {
@@ -2541,39 +2592,21 @@ function handleCanvasClick(ev: PointerEvent) {
       selectedAngleIndex = null;
       selectedPolygonIndex = null;
       selectedSegments.clear();
-      if (centerDraggable) {
-        const centerCircles = circlesWithCenter(centerIdx).filter((ci) => {
-          const circle = model.circles[ci];
-          return circle?.circle_kind === 'center-radius';
-        });
-        if (centerCircles.length) {
-          const context = new Map<number, Map<number, number>>();
-          centerCircles.forEach((ci) => {
-            const circle = model.circles[ci];
-            const centerPointRef = centerPoint;
-            if (!circle || !centerPointRef) return;
-            const angles = new Map<number, number>();
-            circle.points.forEach((pid) => {
-              const pnt = model.points[pid];
-              if (!pnt) return;
-              angles.set(pid, Math.atan2(pnt.y - centerPointRef.y, pnt.x - centerPointRef.x));
-            });
-            const radiusPt = model.points[circle.radius_point];
-            if (radiusPt) {
-              angles.set(
-                circle.radius_point,
-                Math.atan2(radiusPt.y - centerPointRef.y, radiusPt.x - centerPointRef.x)
-              );
-            }
-            context.set(ci, angles);
-          });
-          draggingCircleCenterAngles = context;
-        }
-      }
-      selectedPointIndex = centerDraggable ? centerIdx : null;
-      draggingSelection = !!centerDraggable;
+      const originals = new Map<number, { x: number; y: number }>();
+      const recordPoint = (idx: number | undefined) => {
+        if (idx === undefined || idx < 0) return;
+        const pt = model.points[idx];
+        if (!pt) return;
+        originals.set(idx, { x: pt.x, y: pt.y });
+      };
+      recordPoint(centerIdx);
+      recordPoint(c.radius_point);
+      c.points.forEach((pid) => recordPoint(pid));
+      circleDragContext = { circleIdx, originals };
+      draggingSelection = centerDraggable || originals.size > 0;
       dragStart = { x, y };
-      lineDragContext = centerDraggable ? captureLineContext(centerIdx) : null;
+      lineDragContext = null;
+      draggingCircleCenterAngles = null;
       updateSelectionButtons();
       draw();
       return;
@@ -2803,6 +2836,17 @@ function initRuntime() {
   }
   canvas.addEventListener('pointerdown', handleCanvasClick);
   canvas.addEventListener('pointermove', (ev) => {
+    if (ev.pointerType === 'touch') {
+      updateTouchPointFromEvent(ev);
+      if (activeTouches.size >= 2 && !pinchState) {
+        startPinchFromTouches();
+      }
+      if (pinchState) {
+        continuePinchGesture();
+        ev.preventDefault();
+        return;
+      }
+    }
     const { x, y } = toPoint(ev);
     activeAxisSnap = null;
     if (resizingLine) {
@@ -2858,6 +2902,37 @@ function initRuntime() {
       const dx = x - dragStart.x;
       const dy = y - dragStart.y;
       const movedPoints = new Set<number>();
+
+      if (
+        circleDragContext &&
+        selectedCircleIndex !== null &&
+        circleDragContext.circleIdx === selectedCircleIndex &&
+        selectedPointIndex === null &&
+        selectedSegments.size === 0
+      ) {
+        circleDragContext.originals.forEach((orig, idx) => {
+          const pt = model.points[idx];
+          if (!pt) return;
+          model.points[idx] = { ...pt, x: orig.x + dx, y: orig.y + dy };
+          movedPoints.add(idx);
+        });
+        if (movedPoints.size > 0) {
+          movedPoints.forEach((idx) => {
+            updateMidpointsForPoint(idx);
+            updateCirclesForPoint(idx);
+          });
+          updateIntersectionsForCircle(circleDragContext.circleIdx);
+          const referencing = new Set<number>(movedPoints);
+          referencing.forEach((idx) => {
+            circlesReferencingPoint(idx).forEach((ci) => {
+              if (ci !== circleDragContext!.circleIdx) updateIntersectionsForCircle(ci);
+            });
+          });
+          movedDuringDrag = true;
+          draw();
+        }
+        return;
+      }
 
       if (selectedPointIndex !== null) {
         const p = model.points[selectedPointIndex];
@@ -2966,12 +3041,9 @@ function initRuntime() {
               const circle = model.circles[circleIdx];
               if (!circle) return;
               const radiusPoint = model.points[circle.radius_point];
-              let currentRadius = radiusPoint
-                ? Math.hypot(radiusPoint.x - target.x, radiusPoint.y - target.y)
-                : fallbackRadius;
-              if (!(currentRadius > 0)) currentRadius = fallbackRadius;
-              if (!(currentRadius > 0)) currentRadius = circleRadius(circle);
-              if (!(currentRadius > 0)) return;
+              let radiusLength = circleRadius(circle);
+              if (!(radiusLength > 0)) radiusLength = fallbackRadius;
+              if (!(radiusLength > 0)) return;
               if (radiusPoint) {
                 angleMap.set(
                   circle.radius_point,
@@ -2984,8 +3056,8 @@ function initRuntime() {
                 const pt = model.points[pid];
                 if (!pt) return;
                 const pos = {
-                  x: target.x + Math.cos(angle) * currentRadius,
-                  y: target.y + Math.sin(angle) * currentRadius
+                  x: target.x + Math.cos(angle) * radiusLength,
+                  y: target.y + Math.sin(angle) * radiusLength
                 };
                 model.points[pid] = { ...pt, ...pos };
                 movedPoints.add(pid);
@@ -3306,12 +3378,24 @@ function initRuntime() {
       draw();
     }
   });
-  canvas.addEventListener('pointerup', (ev) => {
+  const handlePointerRelease = (ev: PointerEvent) => {
+    if (ev.pointerType === 'touch') {
+      removeTouchPoint(ev.pointerId);
+      if (activeTouches.size >= 2 && !pinchState) {
+        startPinchFromTouches();
+      }
+      try {
+        canvas!.releasePointerCapture(ev.pointerId);
+      } catch (_) {
+        /* ignore release errors */
+      }
+    }
     resizingLine = null;
     draggingSelection = false;
     lineDragContext = null;
     draggingLabel = null;
     draggingCircleCenterAngles = null;
+    circleDragContext = null;
     isPanning = false;
     pendingPanCandidate = null;
     const snapInfo = activeAxisSnap;
@@ -3326,7 +3410,10 @@ function initRuntime() {
       movedDuringDrag = false;
       movedDuringPan = false;
     }
-  });
+  };
+  canvas.addEventListener('pointerup', handlePointerRelease);
+  canvas.addEventListener('pointercancel', handlePointerRelease);
+  canvas.addEventListener('wheel', handleCanvasWheel, { passive: false });
 
   modeAddBtn?.addEventListener('click', () => handleToolClick('add'));
   modeAddBtn?.addEventListener('dblclick', (e) => { e.preventDefault(); handleToolSticky('add'); });
@@ -3684,6 +3771,7 @@ function initRuntime() {
     selectedLabel = null;
     segmentStartIndex = null;
     panOffset = { x: 0, y: 0 };
+    zoomFactor = 1;
     closeStyleMenu();
     closeZoomMenu();
     closeViewMenu();
@@ -3812,12 +3900,13 @@ if (typeof window !== 'undefined') {
 
 // helpers
 function findPoint(p: { x: number; y: number }): number | null {
+  const tol = currentHitRadius();
   for (let i = model.points.length - 1; i >= 0; i--) {
     const pt = model.points[i];
     if (pt.style.hidden && !showHidden) continue;
     const dx = pt.x - p.x;
     const dy = pt.y - p.y;
-    if (Math.hypot(dx, dy) <= HIT_RADIUS) return i;
+    if (Math.hypot(dx, dy) <= tol) return i;
   }
   return null;
 }
@@ -3926,6 +4015,7 @@ type CircleHit = { circle: number };
 
 function findLineHits(p: { x: number; y: number }): LineHit[] {
   const hits: LineHit[] = [];
+  const tol = currentHitRadius();
   for (let i = model.lines.length - 1; i >= 0; i--) {
     const line = model.lines[i];
     if (line.hidden && !showHidden) continue;
@@ -3937,7 +4027,7 @@ function findLineHits(p: { x: number; y: number }): LineHit[] {
         if (!a || !b) continue;
         if (style.hidden && !showHidden) continue;
         if (!showHidden && (a.style.hidden || b.style.hidden)) continue;
-        if (pointToSegmentDistance(p, a, b) <= HIT_RADIUS) {
+        if (pointToSegmentDistance(p, a, b) <= tol) {
           hits.push({ line: i, part: 'segment', seg: s });
           break;
         }
@@ -3949,14 +4039,14 @@ function findLineHits(p: { x: number; y: number }): LineHit[] {
         const dy = b.y - a.y;
         const len = Math.hypot(dx, dy) || 1;
         const dir = { x: dx / len, y: dy / len };
-        const extend = (canvas!.width + canvas!.height) / dpr;
+        const extend = (canvas!.width + canvas!.height) / (dpr * zoomFactor);
         if (line.leftRay && !(line.leftRay.hidden && !showHidden)) {
           const rayEnd = { x: a.x - dir.x * extend, y: a.y - dir.y * extend };
-          if (pointToSegmentDistance(p, a, rayEnd) <= HIT_RADIUS) hits.push({ line: i, part: 'rayLeft' });
+          if (pointToSegmentDistance(p, a, rayEnd) <= tol) hits.push({ line: i, part: 'rayLeft' });
         }
         if (line.rightRay && !(line.rightRay.hidden && !showHidden)) {
           const rayEnd = { x: b.x + dir.x * extend, y: b.y + dir.y * extend };
-          if (pointToSegmentDistance(p, b, rayEnd) <= HIT_RADIUS) hits.push({ line: i, part: 'rayRight' });
+          if (pointToSegmentDistance(p, b, rayEnd) <= tol) hits.push({ line: i, part: 'rayRight' });
         }
       }
     }
@@ -4060,7 +4150,7 @@ function angleOnArc(test: number, start: number, end: number, clockwise: boolean
 
 function findArcAt(
   p: { x: number; y: number },
-  tolerance = HIT_RADIUS,
+  tolerance = currentHitRadius(),
   onlyCircle?: number
 ): { circle: number; arcIdx: number } | null {
   for (let ci = model.circles.length - 1; ci >= 0; ci--) {
@@ -4145,7 +4235,7 @@ function adjustSelectedAngleRadius(direction: 1 | -1) {
   updateStyleMenuValues();
 }
 
-function findAngleAt(p: { x: number; y: number }, tolerance = HIT_RADIUS): number | null {
+function findAngleAt(p: { x: number; y: number }, tolerance = currentHitRadius()): number | null {
   for (let i = model.angles.length - 1; i >= 0; i--) {
     const geom = angleGeometry(model.angles[i]);
     if (!geom) continue;
@@ -4240,31 +4330,130 @@ function getAngleLabelPos(idx: number): { x: number; y: number } | null {
 }
 
 function findLabelAt(p: { x: number; y: number }): { kind: 'point' | 'line' | 'angle' | 'free'; id: number } | null {
+  const tolerance = currentLabelHitRadius();
   for (let i = model.angles.length - 1; i >= 0; i--) {
     const pos = getAngleLabelPos(i);
-    if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= LABEL_HIT_RADIUS) return { kind: 'angle', id: i };
+    if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= tolerance) return { kind: 'angle', id: i };
   }
   for (let i = model.lines.length - 1; i >= 0; i--) {
     const pos = getLineLabelPos(i);
-    if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= LABEL_HIT_RADIUS) return { kind: 'line', id: i };
+    if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= tolerance) return { kind: 'line', id: i };
   }
   for (let i = model.points.length - 1; i >= 0; i--) {
     const pos = getPointLabelPos(i);
-    if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= LABEL_HIT_RADIUS) return { kind: 'point', id: i };
+    if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= tolerance) return { kind: 'point', id: i };
   }
   for (let i = model.labels.length - 1; i >= 0; i--) {
     const lab = model.labels[i];
     if (lab.hidden && !showHidden) continue;
-    if (Math.hypot(lab.pos.x - p.x, lab.pos.y - p.y) <= LABEL_HIT_RADIUS) return { kind: 'free', id: i };
+    if (Math.hypot(lab.pos.x - p.x, lab.pos.y - p.y) <= tolerance) return { kind: 'free', id: i };
   }
   return null;
 }
 
 function toPoint(ev: PointerEvent) {
   const rect = canvas!.getBoundingClientRect();
-  const x = ev.clientX - rect.left - panOffset.x;
-  const y = ev.clientY - rect.top - panOffset.y;
-  return { x, y };
+  const canvasX = ev.clientX - rect.left;
+  const canvasY = ev.clientY - rect.top;
+  return canvasToWorld(canvasX, canvasY);
+}
+
+function canvasToWorld(canvasX: number, canvasY: number) {
+  return {
+    x: (canvasX - panOffset.x) / zoomFactor,
+    y: (canvasY - panOffset.y) / zoomFactor
+  };
+}
+
+function worldToCanvas(worldX: number, worldY: number) {
+  return {
+    x: worldX * zoomFactor + panOffset.x,
+    y: worldY * zoomFactor + panOffset.y
+  };
+}
+
+function updateTouchPointFromEvent(ev: PointerEvent) {
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  activeTouches.set(ev.pointerId, { x: ev.clientX - rect.left, y: ev.clientY - rect.top });
+}
+
+function removeTouchPoint(pointerId: number) {
+  activeTouches.delete(pointerId);
+  if (pinchState && !pinchState.pointerIds.every((id) => activeTouches.has(id))) {
+    pinchState = null;
+  }
+}
+
+function startPinchFromTouches(): boolean {
+  const entries = Array.from(activeTouches.entries());
+  if (entries.length < 2) return false;
+  const [[idA, ptA], [idB, ptB]] = entries as [[number, TouchPoint], [number, TouchPoint]];
+  const distance = Math.hypot(ptA.x - ptB.x, ptA.y - ptB.y);
+  if (!(distance > 0)) return false;
+  pinchState = {
+    pointerIds: [idA, idB],
+    initialDistance: distance,
+    initialZoom: zoomFactor
+  };
+  draggingSelection = false;
+  resizingLine = null;
+  lineDragContext = null;
+  pendingPanCandidate = null;
+  isPanning = false;
+  return true;
+}
+
+function continuePinchGesture(): boolean {
+  if (!pinchState) return false;
+  const [idA, idB] = pinchState.pointerIds;
+  const ptA = activeTouches.get(idA);
+  const ptB = activeTouches.get(idB);
+  if (!ptA || !ptB) return false;
+  const distance = Math.hypot(ptA.x - ptB.x, ptA.y - ptB.y);
+  if (!(distance > 0)) return false;
+  const ratio = distance / pinchState.initialDistance;
+  const midpoint = { x: (ptA.x + ptB.x) / 2, y: (ptA.y + ptB.y) / 2 };
+  const worldBefore = canvasToWorld(midpoint.x, midpoint.y);
+  const nextZoom = clamp(pinchState.initialZoom * ratio, MIN_ZOOM, MAX_ZOOM);
+  const zoomChanged = Math.abs(nextZoom - zoomFactor) > 1e-6;
+  const prevPan = { ...panOffset };
+  zoomFactor = nextZoom;
+  panOffset = {
+    x: midpoint.x - worldBefore.x * zoomFactor,
+    y: midpoint.y - worldBefore.y * zoomFactor
+  };
+  const panChanged = Math.abs(panOffset.x - prevPan.x) > 1e-6 || Math.abs(panOffset.y - prevPan.y) > 1e-6;
+  if (zoomChanged || panChanged) {
+    movedDuringPan = true;
+    draw();
+  }
+  pinchState.initialDistance = distance;
+  pinchState.initialZoom = zoomFactor;
+  return zoomChanged || panChanged;
+}
+
+function handleCanvasWheel(ev: WheelEvent) {
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const canvasX = ev.clientX - rect.left;
+  const canvasY = ev.clientY - rect.top;
+  const focusWorld = canvasToWorld(canvasX, canvasY);
+  const deltaY = ev.deltaMode === WheelEvent.DOM_DELTA_LINE ? ev.deltaY * 16 : ev.deltaY;
+  const zoomDelta = Math.exp(-deltaY * 0.001);
+  const nextZoom = clamp(zoomFactor * zoomDelta, MIN_ZOOM, MAX_ZOOM);
+  if (Math.abs(nextZoom - zoomFactor) < 1e-6) {
+    ev.preventDefault();
+    return;
+  }
+  zoomFactor = nextZoom;
+  panOffset = {
+    x: canvasX - focusWorld.x * zoomFactor,
+    y: canvasY - focusWorld.y * zoomFactor
+  };
+  movedDuringPan = true;
+  ev.preventDefault();
+  draw();
 }
 
 function selectLabel(sel: { kind: 'point' | 'line' | 'angle' | 'free'; id: number } | null) {
@@ -4460,7 +4649,19 @@ function updateSelectionButtons() {
 }
 
 function renderWidth(w: number) {
-  return Math.max(0.1, w / dpr);
+  return Math.max(0.1, w / (dpr * zoomFactor));
+}
+
+function screenUnits(value: number) {
+  return value / zoomFactor;
+}
+
+function currentHitRadius(multiplier = 1) {
+  return (HIT_RADIUS * multiplier) / zoomFactor;
+}
+
+function currentLabelHitRadius(multiplier = 1) {
+  return (LABEL_HIT_RADIUS * multiplier) / zoomFactor;
 }
 
 function pointRadius(size: number) {
@@ -4576,6 +4777,9 @@ function defaultAngleLabelOffset(angleIdx: number): { x: number; y: number } {
 function drawLabelText(label: Label, pos: { x: number; y: number }, selected = false) {
   if (!ctx) return;
   ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, panOffset.x * dpr, panOffset.y * dpr);
+  const screenPos = worldToCanvas(pos.x, pos.y);
+  ctx.translate(screenPos.x, screenPos.y);
   ctx.font = `${12}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -4588,8 +4792,8 @@ function drawLabelText(label: Label, pos: { x: number; y: number }, selected = f
     ctx.fillStyle = 'rgba(251,191,36,0.18)'; // soft highlight
     ctx.strokeStyle = THEME.highlight;
     ctx.lineWidth = 1;
-    const x = pos.x - w / 2;
-    const y = pos.y - h / 2;
+    const x = -w / 2;
+    const y = -h / 2;
     const r = 6;
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -4605,7 +4809,7 @@ function drawLabelText(label: Label, pos: { x: number; y: number }, selected = f
     ctx.stroke();
   }
   ctx.fillStyle = label.color ?? '#000';
-  ctx.fillText(label.text, pos.x, pos.y);
+  ctx.fillText(label.text, 0, 0);
   ctx.restore();
 }
 
@@ -5319,7 +5523,7 @@ function updateMidpointsForPoint(parentIdx: number) {
 
 function findCircles(
   p: { x: number; y: number },
-  tolerance = HIT_RADIUS,
+  tolerance = currentHitRadius(),
   includeInterior = true
 ): CircleHit[] {
   const hits: CircleHit[] = [];
@@ -5340,7 +5544,7 @@ function findCircles(
 
 function findCircle(
   p: { x: number; y: number },
-  tolerance = HIT_RADIUS,
+  tolerance = currentHitRadius(),
   includeInterior = true
 ): CircleHit | null {
   const hits = findCircles(p, tolerance, includeInterior);
@@ -5737,7 +5941,8 @@ function pushHistory() {
   rebuildIndexMaps();
   const snapshot: Snapshot = {
     model: deepClone(model),
-    panOffset: { ...panOffset }
+    panOffset: { ...panOffset },
+    zoom: zoomFactor
   };
   history = history.slice(0, historyIndex + 1);
   history.push(snapshot);
@@ -5794,6 +5999,7 @@ function serializeCurrentDocument(): PersistedDocument {
       idCounters: deepClone(model.idCounters)
     },
     panOffset: { ...panOffset },
+    zoom: zoomFactor,
     labelState: {
       upper: labelUpperIdx,
       lower: labelLowerIdx,
@@ -5890,6 +6096,7 @@ function applyPersistedDocument(raw: unknown) {
   panOffset = doc.panOffset
     ? { x: Number(doc.panOffset.x) || 0, y: Number(doc.panOffset.y) || 0 }
     : { x: 0, y: 0 };
+  zoomFactor = clamp(Number(doc.zoom) || 1, MIN_ZOOM, MAX_ZOOM);
   const sanitizeNumbers = (values: unknown): number[] =>
     Array.isArray(values)
       ? values
@@ -5999,6 +6206,7 @@ function restoreHistory() {
   if (!snap) return;
   model = deepClone(snap.model);
   panOffset = { ...snap.panOffset };
+  zoomFactor = clamp(snap.zoom ?? 1, MIN_ZOOM, MAX_ZOOM);
   rebuildIndexMaps();
   selectedLineIndex = null;
   selectedPointIndex = null;
@@ -7301,9 +7509,13 @@ function renderDebugPanel() {
 function drawDebugLabels() {
   if (!debugVisible || !ctx) return;
   ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, panOffset.x * dpr, panOffset.y * dpr);
   ctx.font = '12px sans-serif';
   ctx.textBaseline = 'middle';
   const drawTag = (pos: { x: number; y: number }, text: string) => {
+    ctx!.save();
+    const screenPos = worldToCanvas(pos.x, pos.y);
+    ctx!.translate(screenPos.x, screenPos.y);
     const padding = 4;
     const metrics = ctx!.measureText(text);
     const w = metrics.width + padding * 2;
@@ -7312,33 +7524,35 @@ function drawDebugLabels() {
     ctx!.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx!.lineWidth = 1;
     ctx!.beginPath();
-    ctx!.roundRect(pos.x - w / 2, pos.y - h / 2, w, h, 4);
+    ctx!.roundRect(-w / 2, -h / 2, w, h, 4);
     ctx!.fill();
     ctx!.stroke();
     ctx!.fillStyle = '#e5e7eb';
-    ctx!.fillText(text, pos.x - metrics.width / 2, pos.y);
+    ctx!.fillText(text, -metrics.width / 2, 0);
+    ctx!.restore();
   };
   model.points.forEach((p) => {
     if (p.style.hidden && !showHidden) return;
-    drawTag({ x: p.x, y: p.y - pointRadius(p.style.size) - 10 }, friendlyLabelForId(p.id));
+    const topOffset = pointRadius(p.style.size) / zoomFactor + screenUnits(10);
+    drawTag({ x: p.x, y: p.y - topOffset }, friendlyLabelForId(p.id));
   });
   model.lines.forEach((l, idx) => {
     if (l.hidden && !showHidden) return;
     const ext = lineExtent(idx);
     if (!ext) return;
-    drawTag({ x: ext.center.x, y: ext.center.y - 10 }, friendlyLabelForId(l.id));
+    drawTag({ x: ext.center.x, y: ext.center.y - screenUnits(10) }, friendlyLabelForId(l.id));
   });
   model.circles.forEach((c) => {
     if (c.hidden && !showHidden) return;
     const center = model.points[c.center];
     if (!center) return;
     const radius = circleRadius(c);
-    drawTag({ x: center.x, y: center.y - radius - 10 }, friendlyLabelForId(c.id));
+    drawTag({ x: center.x, y: center.y - radius - screenUnits(10) }, friendlyLabelForId(c.id));
   });
   model.angles.forEach((a) => {
     const v = model.points[a.vertex];
     if (!v) return;
-    drawTag({ x: v.x + 12, y: v.y + 12 }, friendlyLabelForId(a.id));
+    drawTag({ x: v.x + screenUnits(12), y: v.y + screenUnits(12) }, friendlyLabelForId(a.id));
   });
   model.polygons.forEach((p, idx) => {
     const centroid = polygonCentroid(idx);
@@ -7545,7 +7759,8 @@ function findHandle(p: { x: number; y: number }): number | null {
   for (let i = model.lines.length - 1; i >= 0; i--) {
     const handle = getLineHandle(i);
     if (!handle) continue;
-    if (Math.abs(p.x - handle.x) <= HANDLE_SIZE / 2 && Math.abs(p.y - handle.y) <= HANDLE_SIZE / 2) {
+    const half = screenUnits(HANDLE_SIZE / 2);
+    if (Math.abs(p.x - handle.x) <= half && Math.abs(p.y - handle.y) <= half) {
       return i;
     }
   }
