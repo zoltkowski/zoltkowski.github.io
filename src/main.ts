@@ -3679,7 +3679,12 @@ function initRuntime() {
         });
         model.lines = kept;
         remapPolygons(remap);
-        polygonPoints.forEach((pi) => clearPointLabelIfUnused(pi));
+        const orphanVertices = Array.from(polygonPoints).filter((pi) => !pointUsedAnywhere(pi));
+        if (orphanVertices.length) {
+          removePointsAndRelated(orphanVertices, false);
+        } else {
+          polygonPoints.forEach((pi) => clearPointLabelIfUnused(pi));
+        }
       }
       selectedPolygonIndex = null;
       selectedLineIndex = null;
