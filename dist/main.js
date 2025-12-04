@@ -529,6 +529,14 @@ function reclaimLabel(label) {
         pool.sort((a, b) => a - b);
     }
 }
+function resetLabelState() {
+    labelUpperIdx = 0;
+    labelLowerIdx = 0;
+    labelGreekIdx = 0;
+    freeUpperIdx = [];
+    freeLowerIdx = [];
+    freeGreekIdx = [];
+}
 function draw() {
     if (!canvas || !ctx)
         return;
@@ -3346,6 +3354,12 @@ function initRuntime() {
         else if (selectedPolygonIndex !== null) {
             const poly = model.polygons[selectedPolygonIndex];
             if (poly) {
+                const polygonPoints = new Set(polygonVertices(selectedPolygonIndex));
+                poly.lines.forEach((li) => {
+                    const line = model.lines[li];
+                    if (line?.label)
+                        reclaimLabel(line.label);
+                });
                 const remap = new Map();
                 const toRemove = new Set(poly.lines);
                 const kept = [];
@@ -3360,6 +3374,7 @@ function initRuntime() {
                 });
                 model.lines = kept;
                 remapPolygons(remap);
+                polygonPoints.forEach((pi) => clearPointLabelIfUnused(pi));
             }
             selectedPolygonIndex = null;
             selectedLineIndex = null;
@@ -3371,6 +3386,8 @@ function initRuntime() {
         else if (selectedLineIndex !== null) {
             const line = model.lines[selectedLineIndex];
             const deletedLineId = line?.id;
+            if (line?.label)
+                reclaimLabel(line.label);
             if (selectionVertices) {
                 const pts = Array.from(new Set(line.points));
                 removePointsAndRelated(pts, true);
@@ -3446,6 +3463,8 @@ function initRuntime() {
         else if (selectedCircleIndex !== null) {
             const circle = model.circles[selectedCircleIndex];
             if (circle) {
+                if (circle.label)
+                    reclaimLabel(circle.label);
                 const circleId = circle.id;
                 const toRemove = new Set([circle.center]);
                 const constrainedPoints = [circle.radius_point, ...circle.points];
@@ -3564,6 +3583,7 @@ function initRuntime() {
     });
     clearAllBtn?.addEventListener('click', () => {
         model = createEmptyModel();
+        resetLabelState();
         selectedLineIndex = null;
         selectedPointIndex = null;
         selectedLabel = null;
@@ -5944,6 +5964,7 @@ function applyPersistedDocument(raw) {
         throw new Error('Nieobsługiwana wersja pliku JSON');
     if (!doc.model)
         throw new Error('Brak sekcji modelu w pliku JSON');
+    resetLabelState();
     const persistedModel = doc.model;
     const toPoint = (p) => {
         const { incident_objects: incidents = [], ...rest } = deepClone(p);
@@ -6349,6 +6370,8 @@ function removePointsAndRelated(points, removeLines = false) {
         const kept = [];
         model.lines.forEach((line, idx) => {
             if (line.defining_points.some((pi) => toRemove.has(pi))) {
+                if (line.label)
+                    reclaimLabel(line.label);
                 remap.set(idx, -1);
                 if (isParallelLine(line)) {
                     const helperIdx = pointIndexById(line.parallel.helperPoint);
@@ -6365,15 +6388,21 @@ function removePointsAndRelated(points, removeLines = false) {
         model.lines = kept;
         remapPolygons(remap);
         model.circles = model.circles.filter((circle) => {
-            if (toRemove.has(circle.center))
+            const removeCircle = toRemove.has(circle.center) ||
+                toRemove.has(circle.radius_point) ||
+                (isCircleThroughPoints(circle) && circle.defining_points.some((pi) => toRemove.has(pi)));
+            if (removeCircle && circle.label)
+                reclaimLabel(circle.label);
+            return !removeCircle;
+        });
+        model.angles = model.angles.filter((ang) => {
+            if (toRemove.has(ang.vertex)) {
+                if (ang.label)
+                    reclaimLabel(ang.label);
                 return false;
-            if (toRemove.has(circle.radius_point))
-                return false;
-            if (isCircleThroughPoints(circle) && circle.defining_points.some((pi) => toRemove.has(pi)))
-                return false;
+            }
             return true;
         });
-        model.angles = model.angles.filter((ang) => !toRemove.has(ang.vertex));
     }
     else {
         const remap = new Map();
@@ -6381,6 +6410,8 @@ function removePointsAndRelated(points, removeLines = false) {
         model.lines.forEach((line, idx) => {
             const filteredPoints = line.points.filter((idx) => !toRemove.has(idx));
             if (filteredPoints.length < 2) {
+                if (line.label)
+                    reclaimLabel(line.label);
                 remap.set(idx, -1);
                 return;
             }
@@ -6396,15 +6427,28 @@ function removePointsAndRelated(points, removeLines = false) {
         remapPolygons(remap);
         model.circles = model.circles
             .map((circle) => {
-            if (toRemove.has(circle.center))
+            if (toRemove.has(circle.center) || toRemove.has(circle.radius_point)) {
+                if (circle.label)
+                    reclaimLabel(circle.label);
                 return null;
-            if (isCircleThroughPoints(circle) && circle.defining_points.some((pi) => toRemove.has(pi)))
+            }
+            if (isCircleThroughPoints(circle) && circle.defining_points.some((pi) => toRemove.has(pi))) {
+                if (circle.label)
+                    reclaimLabel(circle.label);
                 return null;
+            }
             const pts = circle.points.filter((idx) => !toRemove.has(idx));
             return { ...circle, points: pts };
         })
             .filter((c) => c !== null);
-        model.angles = model.angles.filter((ang) => !toRemove.has(ang.vertex));
+        model.angles = model.angles.filter((ang) => {
+            if (toRemove.has(ang.vertex)) {
+                if (ang.label)
+                    reclaimLabel(ang.label);
+                return false;
+            }
+            return true;
+        });
     }
     if (extraPoints.length) {
         extraPoints
@@ -6427,6 +6471,8 @@ function removeParallelLinesReferencing(lineId) {
             return;
         if (line.parallel.referenceLine !== lineId)
             return;
+        if (line.label)
+            reclaimLabel(line.label);
         lineIndices.push(idx);
         removedIds.push(line.id);
         const helperIdx = pointIndexById(line.parallel.helperPoint);
@@ -6469,6 +6515,8 @@ function removePerpendicularLinesReferencing(lineId) {
             return;
         if (line.perpendicular.referenceLine !== lineId)
             return;
+        if (line.label)
+            reclaimLabel(line.label);
         lineIndices.push(idx);
         removedIds.push(line.id);
         const helperIdx = pointIndexById(line.perpendicular.helperPoint);
@@ -6503,6 +6551,9 @@ function removePerpendicularLinesReferencing(lineId) {
 function removePointsKeepingOrder(points, allowCleanup = true) {
     const sorted = [...points].sort((a, b) => b - a);
     sorted.forEach((idx) => {
+        const point = model.points[idx];
+        if (point?.label)
+            reclaimLabel(point.label);
         model.points.splice(idx, 1);
         // shift point indices in remaining lines
         model.lines.forEach((line) => {
@@ -6567,6 +6618,46 @@ function cleanupDependentPoints() {
     if (orphanIdxs.size) {
         removePointsKeepingOrder(Array.from(orphanIdxs), false);
     }
+}
+function pointUsedAnywhere(idx) {
+    const point = model.points[idx];
+    if (!point)
+        return false;
+    const usedByLines = model.lines.some((line) => line.points.includes(idx));
+    if (usedByLines)
+        return true;
+    const usedByCircles = model.circles.some((circle) => {
+        if (circle.center === idx || circle.radius_point === idx)
+            return true;
+        return circle.points.includes(idx);
+    });
+    if (usedByCircles)
+        return true;
+    const usedByAngles = model.angles.some((angle) => angle.vertex === idx);
+    if (usedByAngles)
+        return true;
+    const usedByPolygons = model.polygons.some((poly) => poly.lines.some((li) => {
+        const line = model.lines[li];
+        return !!line && line.points.includes(idx);
+    }));
+    if (usedByPolygons)
+        return true;
+    if (point.children.length > 0)
+        return true;
+    if (point.parent_refs.length > 0)
+        return true;
+    if (point.parallel_helper_for || point.perpendicular_helper_for)
+        return true;
+    return false;
+}
+function clearPointLabelIfUnused(idx) {
+    const point = model.points[idx];
+    if (!point?.label)
+        return;
+    if (pointUsedAnywhere(idx))
+        return;
+    reclaimLabel(point.label);
+    model.points[idx] = { ...point, label: undefined };
 }
 function lineLength(idx) {
     const line = model.lines[idx];
