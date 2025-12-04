@@ -670,7 +670,7 @@ function draw() {
                     line.label.offset = defaultLineLabelOffset(lineIdx);
                 const off = line.label.offset ?? { x: 0, y: -10 };
                 const selected = selectedLabel?.kind === 'line' && selectedLabel.id === lineIdx;
-                drawLabelText(line.label, { x: ext.center.x + off.x, y: ext.center.y + off.y }, selected);
+                drawLabelText(line.label, ext.center, selected, off);
             }
         }
         if (activeAxisSnap && activeAxisSnap.lineIdx === lineIdx) {
@@ -868,9 +868,8 @@ function draw() {
             if (!ang.label.offset)
                 ang.label.offset = defaultAngleLabelOffset(idx);
             const off = ang.label.offset ?? { x: 0, y: 0 };
-            const pos = { x: v.x + off.x, y: v.y + off.y };
             const selected = selectedLabel?.kind === 'angle' && selectedLabel.id === idx;
-            drawLabelText(ang.label, pos, selected);
+            drawLabelText(ang.label, v, selected, off);
         }
         ctx.restore();
     });
@@ -894,7 +893,7 @@ function draw() {
                 p.label.offset = defaultPointLabelOffset(idx);
             const off = p.label.offset ?? { x: 8, y: -8 };
             const selected = selectedLabel?.kind === 'point' && selectedLabel.id === idx;
-            drawLabelText(p.label, { x: p.x + off.x, y: p.y + off.y }, selected);
+            drawLabelText(p.label, { x: p.x, y: p.y }, selected, off);
         }
         const highlightPoint = idx === selectedPointIndex;
         const hoverPoint = hoverPointIndex === idx;
@@ -2578,23 +2577,34 @@ function initRuntime() {
         else if (draggingLabel && mode === 'move') {
             const dx = x - draggingLabel.start.x;
             const dy = y - draggingLabel.start.y;
+            const dxScreen = dx * zoomFactor;
+            const dyScreen = dy * zoomFactor;
             switch (draggingLabel.kind) {
                 case 'point': {
                     const p = model.points[draggingLabel.id];
                     if (p?.label)
-                        p.label = { ...p.label, offset: { x: draggingLabel.initialOffset.x + dx, y: draggingLabel.initialOffset.y + dy } };
+                        p.label = {
+                            ...p.label,
+                            offset: { x: draggingLabel.initialOffset.x + dxScreen, y: draggingLabel.initialOffset.y + dyScreen }
+                        };
                     break;
                 }
                 case 'line': {
                     const l = model.lines[draggingLabel.id];
                     if (l?.label)
-                        l.label = { ...l.label, offset: { x: draggingLabel.initialOffset.x + dx, y: draggingLabel.initialOffset.y + dy } };
+                        l.label = {
+                            ...l.label,
+                            offset: { x: draggingLabel.initialOffset.x + dxScreen, y: draggingLabel.initialOffset.y + dyScreen }
+                        };
                     break;
                 }
                 case 'angle': {
                     const a = model.angles[draggingLabel.id];
                     if (a?.label)
-                        a.label = { ...a.label, offset: { x: draggingLabel.initialOffset.x + dx, y: draggingLabel.initialOffset.y + dy } };
+                        a.label = {
+                            ...a.label,
+                            offset: { x: draggingLabel.initialOffset.x + dxScreen, y: draggingLabel.initialOffset.y + dyScreen }
+                        };
                     break;
                 }
                 case 'free': {
@@ -4084,8 +4094,9 @@ function getPointLabelPos(idx) {
         return null;
     if (!p.label.offset)
         p.label.offset = defaultPointLabelOffset(idx);
-    const off = p.label.offset ?? { x: 8, y: -8 };
-    return { x: p.x + off.x, y: p.y + off.y };
+    const offScreen = p.label.offset ?? { x: 8, y: -8 };
+    const offWorld = screenOffsetToWorld(offScreen);
+    return { x: p.x + offWorld.x, y: p.y + offWorld.y };
 }
 function getLineLabelPos(idx) {
     const line = model.lines[idx];
@@ -4096,8 +4107,9 @@ function getLineLabelPos(idx) {
         return null;
     if (!line.label.offset)
         line.label.offset = defaultLineLabelOffset(idx);
-    const off = line.label.offset ?? { x: 0, y: -10 };
-    return { x: ext.center.x + off.x, y: ext.center.y + off.y };
+    const offScreen = line.label.offset ?? { x: 0, y: -10 };
+    const offWorld = screenOffsetToWorld(offScreen);
+    return { x: ext.center.x + offWorld.x, y: ext.center.y + offWorld.y };
 }
 function getAngleLabelPos(idx) {
     const ang = model.angles[idx];
@@ -4108,8 +4120,9 @@ function getAngleLabelPos(idx) {
         return null;
     if (!ang.label.offset)
         ang.label.offset = defaultAngleLabelOffset(idx);
-    const off = ang.label.offset ?? { x: 0, y: 0 };
-    return { x: geom.v.x + off.x, y: geom.v.y + off.y };
+    const offScreen = ang.label.offset ?? { x: 0, y: 0 };
+    const offWorld = screenOffsetToWorld(offScreen);
+    return { x: geom.v.x + offWorld.x, y: geom.v.y + offWorld.y };
 }
 function findLabelAt(p) {
     const tolerance = currentLabelHitRadius();
@@ -4154,6 +4167,12 @@ function worldToCanvas(worldX, worldY) {
         x: worldX * zoomFactor + panOffset.x,
         y: worldY * zoomFactor + panOffset.y
     };
+}
+function screenOffsetToWorld(offset) {
+    return { x: offset.x / zoomFactor, y: offset.y / zoomFactor };
+}
+function worldOffsetToScreen(offset) {
+    return { x: offset.x * zoomFactor, y: offset.y * zoomFactor };
 }
 function updateTouchPointFromEvent(ev) {
     if (!canvas)
@@ -4462,7 +4481,7 @@ function lineMidpoint(lineIdx) {
 function defaultLineLabelOffset(lineIdx) {
     const mp = lineMidpoint(lineIdx);
     if (!mp)
-        return { x: 0, y: -16 };
+        return worldOffsetToScreen({ x: 0, y: -16 });
     const dx = mp.b.x - mp.a.x;
     const dy = mp.b.y - mp.a.y;
     const len = Math.hypot(dx, dy) || 1;
@@ -4484,7 +4503,7 @@ function defaultLineLabelOffset(lineIdx) {
         normal = { x: -normal.x, y: -normal.y }; // aim upward
     }
     const margin = 18;
-    return { x: normal.x * margin, y: normal.y * margin };
+    return worldOffsetToScreen({ x: normal.x * margin, y: normal.y * margin });
 }
 function pointLineDirections(pointIdx) {
     const dirs = [];
@@ -4516,8 +4535,9 @@ function pointLineDirections(pointIdx) {
 }
 function defaultPointLabelOffset(pointIdx) {
     const p = model.points[pointIdx];
+    const fallbackWorld = { x: 12, y: -12 };
     if (!p)
-        return { x: 12, y: -12 };
+        return worldOffsetToScreen(fallbackWorld);
     const circleIdxs = circlesContainingPoint(pointIdx);
     if (circleIdxs.length) {
         const c = model.circles[circleIdxs[0]];
@@ -4525,7 +4545,7 @@ function defaultPointLabelOffset(pointIdx) {
         if (center) {
             const dir = normalize({ x: p.x - center.x, y: p.y - center.y });
             const margin = 18;
-            return { x: dir.x * margin, y: dir.y * margin };
+            return worldOffsetToScreen({ x: dir.x * margin, y: dir.y * margin });
         }
     }
     const dirs = pointLineDirections(pointIdx);
@@ -4537,31 +4557,35 @@ function defaultPointLabelOffset(pointIdx) {
             ? { x: sum.x / len, y: sum.y / len }
             : { x: -dirs[0].y, y: dirs[0].x }; // perpendicular fallback
         dir = { x: -dir.x, y: -dir.y }; // outside the angle
-        return { x: dir.x * margin, y: dir.y * margin };
+        return worldOffsetToScreen({ x: dir.x * margin, y: dir.y * margin });
     }
     if (dirs.length === 1) {
         let dir = { x: -dirs[0].y, y: dirs[0].x }; // perpendicular
         if (dir.y > 0)
             dir = { x: -dir.x, y: -dir.y };
-        return { x: dir.x * margin, y: dir.y * margin };
+        return worldOffsetToScreen({ x: dir.x * margin, y: dir.y * margin });
     }
-    return { x: 12, y: -12 };
+    return worldOffsetToScreen(fallbackWorld);
 }
 function defaultAngleLabelOffset(angleIdx) {
     const geom = angleGeometry(model.angles[angleIdx]);
     if (!geom)
-        return { x: 0, y: -12 };
+        return worldOffsetToScreen({ x: 0, y: -12 });
     const mid = geom.start + geom.span / 2;
     const dir = { x: Math.cos(mid), y: Math.sin(mid) };
     const radius = Math.max(geom.radius * 0.65, 12);
-    return { x: dir.x * radius, y: dir.y * radius };
+    return worldOffsetToScreen({ x: dir.x * radius, y: dir.y * radius });
 }
-function drawLabelText(label, pos, selected = false) {
+function drawLabelText(label, anchor, selected = false, screenOffset) {
     if (!ctx)
         return;
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const screenPos = worldToCanvas(pos.x, pos.y);
+    const anchorScreen = worldToCanvas(anchor.x, anchor.y);
+    const screenPos = {
+        x: anchorScreen.x + (screenOffset?.x ?? 0),
+        y: anchorScreen.y + (screenOffset?.y ?? 0)
+    };
     ctx.translate(screenPos.x, screenPos.y);
     ctx.font = `${12}px sans-serif`;
     ctx.textAlign = 'center';
