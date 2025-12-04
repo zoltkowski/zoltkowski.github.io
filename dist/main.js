@@ -382,15 +382,17 @@ let styleMenuSuppressed = false;
 let styleColorRow = null;
 let styleWidthRow = null;
 let styleTypeRow = null;
-let styleRayRow = null;
+let styleTypeInline = null;
 let styleArcRow = null;
-let styleArcRadiusRow = null;
 let styleHideRow = null;
 let labelTextRow = null;
 let labelFontRow = null;
 let labelGreekRow = null;
 let styleColorInput = null;
 let styleWidthInput = null;
+let lineWidthDecreaseBtn = null;
+let lineWidthIncreaseBtn = null;
+let lineWidthValueDisplay = null;
 let styleTypeSelect = null;
 let labelTextInput = null;
 let arcCountButtons = [];
@@ -399,11 +401,13 @@ let angleRadiusDecreaseBtn = null;
 let angleRadiusIncreaseBtn = null;
 let colorSwatchButtons = [];
 let customColorBtn = null;
-let styleWidthButtons = [];
 let styleTypeButtons = [];
 let labelGreekButtons = [];
 let labelGreekToggleBtn = null;
 let labelGreekShiftBtn = null;
+let styleRayGroup = null;
+let styleRayGap = null;
+let styleTypeGap = null;
 let labelGreekVisible = false;
 let labelGreekUppercase = false;
 let labelFontDecreaseBtn = null;
@@ -2538,9 +2542,11 @@ function initRuntime() {
     styleColorRow = document.getElementById('styleColorRow');
     styleWidthRow = document.getElementById('styleWidthRow');
     styleTypeRow = document.getElementById('styleTypeRow');
-    styleRayRow = document.getElementById('styleRayRow');
+    styleTypeInline = document.getElementById('styleTypeInline');
+    styleRayGroup = document.getElementById('styleRayGroup');
+    styleRayGap = document.getElementById('styleRayGap');
+    styleTypeGap = document.getElementById('styleTypeGap');
     styleArcRow = document.getElementById('styleArcRow');
-    styleArcRadiusRow = document.getElementById('styleArcRadiusRow');
     styleHideRow = document.getElementById('styleHideRow');
     labelTextRow = document.getElementById('labelTextRow');
     labelFontRow = document.getElementById('labelFontRow');
@@ -2549,6 +2555,9 @@ function initRuntime() {
     labelGreekShiftBtn = document.getElementById('labelGreekShift');
     styleColorInput = document.getElementById('styleColor');
     styleWidthInput = document.getElementById('styleWidth');
+    lineWidthDecreaseBtn = document.getElementById('lineWidthDecrease');
+    lineWidthIncreaseBtn = document.getElementById('lineWidthIncrease');
+    lineWidthValueDisplay = document.getElementById('lineWidthValue');
     styleTypeSelect = document.getElementById('styleType');
     labelTextInput = document.getElementById('labelText');
     labelFontDecreaseBtn = document.getElementById('labelFontDecrease');
@@ -2560,7 +2569,6 @@ function initRuntime() {
     angleRadiusIncreaseBtn = document.getElementById('angleRadiusIncreaseBtn');
     colorSwatchButtons = Array.from(document.querySelectorAll('.color-btn:not(.custom-color-btn)'));
     customColorBtn = document.getElementById('customColorBtn');
-    styleWidthButtons = Array.from(document.querySelectorAll('.width-btn'));
     styleTypeButtons = Array.from(document.querySelectorAll('.type-btn'));
     labelGreekButtons = Array.from(document.querySelectorAll('.label-greek-btn'));
     strokeColorInput = styleColorInput;
@@ -3311,15 +3319,8 @@ function initRuntime() {
         if (mode !== 'move')
             setMode('move');
     });
-    styleWidthButtons.forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const w = btn.dataset.width;
-            if (styleWidthInput && w)
-                styleWidthInput.value = w;
-            applyStyleFromInputs();
-            updateStyleMenuValues();
-        });
-    });
+    lineWidthDecreaseBtn?.addEventListener('click', () => adjustLineWidth(-1));
+    lineWidthIncreaseBtn?.addEventListener('click', () => adjustLineWidth(1));
     colorSwatchButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
             const c = btn.dataset.color;
@@ -3727,7 +3728,10 @@ function initRuntime() {
         applyStyleFromInputs();
         updateStyleMenuValues();
     });
-    styleWidthInput?.addEventListener('input', applyStyleFromInputs);
+    styleWidthInput?.addEventListener('input', () => {
+        applyStyleFromInputs();
+        updateLineWidthControls();
+    });
     styleTypeSelect?.addEventListener('change', applyStyleFromInputs);
     labelTextInput?.addEventListener('input', () => {
         if (!labelTextInput)
@@ -5062,6 +5066,55 @@ function adjustSelectedLabelFont(delta) {
         draw();
         pushHistory();
     }
+    updateLineWidthControls();
+}
+function updateLineWidthControls() {
+    if (!styleWidthInput)
+        return;
+    const min = Number(styleWidthInput.min) || 1;
+    const max = Number(styleWidthInput.max) || 10;
+    const raw = Number(styleWidthInput.value);
+    const current = clamp(Number.isFinite(raw) ? Math.round(raw) : min, min, max);
+    if (styleWidthInput.value !== String(current))
+        styleWidthInput.value = String(current);
+    const disabled = styleWidthInput.disabled;
+    if (lineWidthValueDisplay) {
+        lineWidthValueDisplay.textContent = disabled ? '—' : `${current} px`;
+    }
+    const defaultWidth = styleTypeSelect?.disabled ? THEME.pointSize : THEME.lineWidth;
+    if (lineWidthDecreaseBtn) {
+        const atMin = current <= min;
+        lineWidthDecreaseBtn.disabled = disabled || atMin;
+        lineWidthDecreaseBtn.classList.toggle('limit', atMin);
+        lineWidthDecreaseBtn.classList.toggle('active', !disabled && current < defaultWidth);
+    }
+    if (lineWidthIncreaseBtn) {
+        const atMax = current >= max;
+        lineWidthIncreaseBtn.disabled = disabled || atMax;
+        lineWidthIncreaseBtn.classList.toggle('limit', atMax);
+        lineWidthIncreaseBtn.classList.toggle('active', !disabled && current > defaultWidth);
+    }
+}
+function adjustLineWidth(delta) {
+    if (!styleWidthInput || delta === 0) {
+        updateLineWidthControls();
+        return;
+    }
+    if (styleWidthInput.disabled) {
+        updateLineWidthControls();
+        return;
+    }
+    const min = Number(styleWidthInput.min) || 1;
+    const max = Number(styleWidthInput.max) || 10;
+    const current = Number(styleWidthInput.value) || min;
+    const next = clamp(Math.round(current) + delta, min, max);
+    if (next === Math.round(current)) {
+        updateLineWidthControls();
+        return;
+    }
+    styleWidthInput.value = String(next);
+    applyStyleFromInputs();
+    updateLineWidthControls();
 }
 function updateStyleMenuValues() {
     if (!styleColorInput || !styleWidthInput || !styleTypeSelect)
@@ -5227,20 +5280,28 @@ function updateStyleMenuValues() {
         styleWidthInput.disabled = false;
         styleTypeSelect.disabled = true;
     }
-    setRowVisible(styleTypeRow, !isPoint && !labelEditing);
-    setRowVisible(styleRayRow, selectedLineIndex !== null && !labelEditing);
+    updateLineWidthControls();
+    const showTypeGroup = !isPoint && !labelEditing;
+    if (styleTypeInline) {
+        styleTypeInline.style.display = showTypeGroup ? 'inline-flex' : 'none';
+        setRowVisible(styleTypeRow, false);
+    }
+    else {
+        setRowVisible(styleTypeRow, showTypeGroup);
+    }
+    if (styleTypeGap)
+        styleTypeGap.style.display = showTypeGroup ? 'flex' : 'none';
+    const showRays = selectedLineIndex !== null && !labelEditing;
+    if (styleRayGroup)
+        styleRayGroup.style.display = showRays ? 'flex' : 'none';
+    if (styleRayGap)
+        styleRayGap.style.display = showRays ? 'flex' : 'none';
     setRowVisible(styleArcRow, selectedAngleIndex !== null && !labelEditing);
-    setRowVisible(styleArcRadiusRow, selectedAngleIndex !== null && !labelEditing);
     setRowVisible(styleHideRow, !labelEditing);
     setRowVisible(styleEdgesRow, isLineLike && !labelEditing);
     setRowVisible(styleColorRow, true);
     setRowVisible(styleWidthRow, !labelEditing);
     // sync toggles
-    const widthVal = Number(styleWidthInput?.value) || 0;
-    styleWidthButtons.forEach((btn) => {
-        const w = Number(btn.dataset.width) || 0;
-        btn.classList.toggle('active', w === widthVal);
-    });
     const typeVal = styleTypeSelect?.value;
     styleTypeButtons.forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.type === typeVal);
@@ -5468,6 +5529,7 @@ function applyStyleFromInputs() {
         }
         else {
             c.style = { ...c.style, color, width, type };
+            changed = true;
             for (let i = 0; i < segCount; i++)
                 applyArc(i);
         }

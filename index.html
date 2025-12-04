@@ -25,13 +25,37 @@
             </svg>
           </button>
           <div class="dropdown-menu" style="width:100%; box-sizing:border-box;">
-            <div class="tool-row" id="styleEdgesRow" style="justify-content:flex-start;">
-              <button class="tool icon-btn" id="viewVerticesOption" title="Wierzchołki">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="3.6" fill="none" stroke="currentColor"/><circle cx="7" cy="12" r="1.6" class="icon-fill"/><circle cx="17" cy="12" r="3.6" fill="none" stroke="currentColor"/><circle cx="17" cy="12" r="1.6" class="icon-fill"/></svg>
-              </button>
-              <button class="tool icon-btn" id="viewEdgesOption" title="Krawędzie">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              </button>
+            <div class="tool-row style-line-row" id="styleEdgesRow" style="justify-content:flex-start;">
+              <div class="style-group" id="styleVerticesGroup">
+                <button class="tool icon-btn" id="viewVerticesOption" title="Wierzchołki">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="3.6" fill="none" stroke="currentColor"/><circle cx="7" cy="12" r="1.6" class="icon-fill"/><circle cx="17" cy="12" r="3.6" fill="none" stroke="currentColor"/><circle cx="17" cy="12" r="1.6" class="icon-fill"/></svg>
+                </button>
+                <button class="tool icon-btn" id="viewEdgesOption" title="Krawędzie">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+              </div>
+              <span class="style-row-gap" id="styleRayGap"></span>
+              <div class="style-group" id="styleRayGroup">
+                <button class="tool icon-btn" id="rayLeftOption" title="Lewa półprosta">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="4" y1="12" x2="18" y2="12"/>
+                    <circle cx="18" cy="12" r="1.7" class="icon-fill"/>
+                  </svg>
+                </button>
+                <button class="tool icon-btn" id="rayRightOption" title="Prawa półprosta">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="6" cy="12" r="1.7" class="icon-fill"/>
+                    <line x1="6" y1="12" x2="20" y2="12"/>
+                  </svg>
+                </button>
+                <button class="tool icon-btn" id="raySegmentOption" title="Odcinek">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="7" cy="12" r="1.8" class="icon-fill"/>
+                    <circle cx="17" cy="12" r="1.8" class="icon-fill"/>
+                    <line x1="7" y1="12" x2="17" y2="12"/>
+                  </svg>
+                </button>
+              </div>
             </div>
             <input type="color" id="styleColor" value="#15a3ff" style="display:none">
             <div class="tool-row" id="styleColorRow" style="justify-content:flex-start; gap:6px; margin-bottom:4px;">
@@ -100,32 +124,40 @@
               <button type="button" class="tool icon-btn label-greek-btn label-symbol-btn" title="Trójkąt" data-letter="△" data-letter-lower="△" data-letter-upper="△">△</button>
             </div>
             <input type="number" id="styleWidth" min="1" max="10" value="2" style="display:none">
-            <div class="tool-row" id="styleWidthRow" style="justify-content:flex-start;">
-              <button class="tool icon-btn width-btn" data-width="1" title="Grubość 1">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5" class="icon-fill"/></svg>
-              </button>
-              <button class="tool icon-btn width-btn" data-width="2" title="Grubość 2">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5" class="icon-fill"/></svg>
-              </button>
-              <button class="tool icon-btn width-btn" data-width="3" title="Grubość 3">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" class="icon-fill"/></svg>
-              </button>
-              <button class="tool icon-btn width-btn" data-width="4" title="Grubość 4">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5.5" class="icon-fill"/></svg>
-              </button>
-              <button class="tool icon-btn width-btn" data-width="5" title="Grubość 5">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5" class="icon-fill"/></svg>
-              </button>
-              <button class="tool icon-btn width-btn" data-width="6" title="Grubość 6">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5" class="icon-fill"/></svg>
-              </button>
+            <div class="tool-row line-width-row" id="styleWidthRow" style="justify-content:flex-start;">
+              <div class="style-group line-width-group">
+                <button class="tool icon-btn line-width-btn" id="lineWidthDecrease" title="Zmniejsz grubość" aria-label="Zmniejsz grubość">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="6" y1="12" x2="18" y2="12" />
+                  </svg>
+                </button>
+                <span id="lineWidthValue" class="line-width-value" aria-live="polite">2 px</span>
+                <button class="tool icon-btn line-width-btn" id="lineWidthIncrease" title="Zwiększ grubość" aria-label="Zwiększ grubość">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <line x1="6" y1="12" x2="18" y2="12" />
+                    <line x1="12" y1="6" x2="12" y2="18" />
+                  </svg>
+                </button>
+              </div>
+              <span class="style-row-gap" id="styleTypeGap"></span>
+              <div class="style-group" id="styleTypeInline">
+                <button class="tool icon-btn type-btn" data-type="solid" title="Linia ciągła">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12"/></svg>
+                </button>
+                <button class="tool icon-btn type-btn" data-type="dashed" title="Linia przerywana">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12" stroke-dasharray="4 3"/></svg>
+                </button>
+                <button class="tool icon-btn type-btn" data-type="dotted" title="Linia kropkowana">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12" stroke-dasharray="1 3"/></svg>
+                </button>
+              </div>
             </div>
             <select id="styleType" style="display:none">
               <option value="solid">Ciągła</option>
               <option value="dashed">Przerywana</option>
               <option value="dotted">Kropkowana</option>
             </select>
-            <div class="tool-row" id="styleTypeRow" style="justify-content:flex-start; margin-top:6px;">
+            <div class="tool-row" id="styleTypeRow" style="justify-content:flex-start; margin-top:6px; display:none;">
               <button class="tool icon-btn type-btn" data-type="solid" title="Linia ciągła">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12"/></svg>
               </button>
@@ -136,28 +168,18 @@
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12" stroke-dasharray="1 3"/></svg>
               </button>
             </div>
-            <div class="tool-row" id="styleRayRow" style="justify-content:flex-start; margin-top:6px;">
-              <button class="tool icon-btn" id="rayLeftOption" title="Lewa półprosta">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <line x1="4" y1="12" x2="18" y2="12"/>
-                  <circle cx="18" cy="12" r="1.7" class="icon-fill"/>
-                </svg>
-              </button>
-              <button class="tool icon-btn" id="rayRightOption" title="Prawa półprosta">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="6" cy="12" r="1.7" class="icon-fill"/>
-                  <line x1="6" y1="12" x2="20" y2="12"/>
-                </svg>
-              </button>
-              <button class="tool icon-btn" id="raySegmentOption" title="Odcinek">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="7" cy="12" r="1.8" class="icon-fill"/>
-                  <circle cx="17" cy="12" r="1.8" class="icon-fill"/>
-                <line x1="7" y1="12" x2="17" y2="12"/>
-              </svg>
-            </button>
-            </div>
             <div class="tool-row" id="styleArcRow" style="justify-content:flex-start; margin-top:6px; display:none;">
+              <button class="tool icon-btn" id="angleRadiusDecreaseBtn" title="Zmniejsz promień łuku">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="6" y1="12" x2="18" y2="12" />
+                </svg>
+              </button>
+              <button class="tool icon-btn" id="angleRadiusIncreaseBtn" title="Zwiększ promień łuku">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <line x1="6" y1="12" x2="18" y2="12" />
+                  <line x1="12" y1="6" x2="12" y2="18" />
+                </svg>
+              </button>
               <button class="tool icon-btn arc-count-btn" data-count="1" title="Pojedynczy łuk">
                 <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16a6 6 0 0 1 12 0"/></svg>
               </button>
@@ -172,19 +194,6 @@
                   <line x1="6" y1="4" x2="6" y2="20" />
                   <line x1="6" y1="20" x2="20" y2="20" />
                   <rect x="6" y="16" width="4" height="4" fill="none"/>
-                </svg>
-              </button>
-            </div>
-            <div class="tool-row" id="styleArcRadiusRow" style="justify-content:flex-start; margin-top:4px; display:none;">
-              <button class="tool icon-btn" id="angleRadiusDecreaseBtn" title="Zmniejsz promień łuku">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <line x1="6" y1="12" x2="18" y2="12" />
-                </svg>
-              </button>
-              <button class="tool icon-btn" id="angleRadiusIncreaseBtn" title="Zwiększ promień łuku">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <line x1="6" y1="12" x2="18" y2="12" />
-                  <line x1="12" y1="6" x2="12" y2="18" />
                 </svg>
               </button>
             </div>
