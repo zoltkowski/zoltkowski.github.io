@@ -15,6 +15,9 @@ const LABEL_FONT_DEFAULT = 12;
 const LABEL_FONT_MIN = 8;
 const LABEL_FONT_MAX = 48;
 const LABEL_FONT_STEP = 2;
+const TICK_LENGTH_UNITS = 12;
+const TICK_SPACING_UNITS = 8;
+const TICK_MARGIN_UNITS = 4;
 function axisSnapWeight(closeness) {
     if (closeness >= LINE_SNAP_FULL_THRESHOLD)
         return 1;
@@ -406,7 +409,8 @@ let labelGreekButtons = [];
 let labelGreekToggleBtn = null;
 let labelGreekShiftBtn = null;
 let styleRayGroup = null;
-let styleRayGap = null;
+let styleTickGroup = null;
+let styleTickButton = null;
 let styleTypeGap = null;
 let labelGreekVisible = false;
 let labelGreekUppercase = false;
@@ -444,6 +448,9 @@ const ICONS = {
     rayRightOnly: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="14" y2="12"/><path d="m14 8 6 4-6 4"/></svg>',
     rayLeftOnly: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="10" y1="12" x2="20" y2="12"/><path d="m10 8-6 4 6 4"/></svg>',
     raySegment: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="2" class="icon-fill"/><circle cx="16" cy="12" r="2" class="icon-fill"/><line x1="8" y1="12" x2="16" y2="12"/></svg>',
+    tick1: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12" stroke-linecap="round" stroke-width="1.8"/><line x1="12" y1="8" x2="12" y2="16" stroke-linecap="round" stroke-width="1.8"/></svg>',
+    tick2: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12" stroke-linecap="round" stroke-width="1.8"/><line x1="10" y1="8" x2="10" y2="16" stroke-linecap="round" stroke-width="1.8"/><line x1="14" y1="8" x2="14" y2="16" stroke-linecap="round" stroke-width="1.8"/></svg>',
+    tick3: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="12" x2="20" y2="12" stroke-linecap="round" stroke-width="1.8"/><line x1="9" y1="7.5" x2="9" y2="16.5" stroke-linecap="round" stroke-width="1.8"/><line x1="12" y1="7.5" x2="12" y2="16.5" stroke-linecap="round" stroke-width="1.8"/><line x1="15" y1="7.5" x2="15" y2="16.5" stroke-linecap="round" stroke-width="1.8"/></svg>',
     eye: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s4-6 9-6 9 6 9 6-4 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="3"/></svg>',
     eyeOff: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s4-6 9-6 9 6 9 6-4 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="3"/><path d="M4 4 20 20"/></svg>'
 };
@@ -477,7 +484,8 @@ function currentStrokeStyle() {
     return {
         color: THEME.defaultStroke,
         width: THEME.lineWidth,
-        type: 'solid'
+        type: 'solid',
+        tick: 0
     };
 }
 function currentAngleStyle() {
@@ -617,6 +625,8 @@ function draw() {
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
             ctx.stroke();
+            if (style.tick)
+                drawSegmentTicks({ x: a.x, y: a.y }, { x: b.x, y: b.y }, style.tick, ctx);
             if (shouldHighlight) {
                 ctx.strokeStyle = highlightColor;
                 ctx.lineWidth = renderWidth(style.width + HIGHLIGHT_LINE.width);
@@ -764,6 +774,8 @@ function draw() {
         ctx.beginPath();
         ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
         ctx.stroke();
+        if (style.tick)
+            drawCircleTicks(center, radius, style.tick, ctx);
         if (selected) {
             ctx.strokeStyle = HIGHLIGHT_LINE.color;
             ctx.lineWidth = renderWidth(style.width + HIGHLIGHT_LINE.width);
@@ -792,6 +804,10 @@ function draw() {
             ctx.beginPath();
             ctx.arc(center.x, center.y, arc.radius, arc.start, arc.end, arc.clockwise);
             ctx.stroke();
+            const baseTick = (circle.style.tick ?? 0);
+            const arcTick = (style.tick ?? baseTick);
+            if (arcTick)
+                drawArcTicks(center, arc.radius, arc.start, arc.end, arc.clockwise, arcTick, ctx);
             const key = arcKey(ci, ai);
             const isSelected = selectedCircleIndex === ci && (selectedArcSegments.size === 0 || selectedArcSegments.has(key));
             if (isSelected) {
@@ -2544,7 +2560,8 @@ function initRuntime() {
     styleTypeRow = document.getElementById('styleTypeRow');
     styleTypeInline = document.getElementById('styleTypeInline');
     styleRayGroup = document.getElementById('styleRayGroup');
-    styleRayGap = document.getElementById('styleRayGap');
+    styleTickGroup = document.getElementById('styleTickGroup');
+    styleTickButton = document.getElementById('styleTickToggle');
     styleTypeGap = document.getElementById('styleTypeGap');
     styleArcRow = document.getElementById('styleArcRow');
     styleHideRow = document.getElementById('styleHideRow');
@@ -3733,6 +3750,9 @@ function initRuntime() {
         updateLineWidthControls();
     });
     styleTypeSelect?.addEventListener('change', applyStyleFromInputs);
+    styleTickButton?.addEventListener('click', () => {
+        cycleTickState();
+    });
     labelTextInput?.addEventListener('input', () => {
         if (!labelTextInput)
             return;
@@ -4665,6 +4685,92 @@ function renderWidth(w) {
 function screenUnits(value) {
     return value / zoomFactor;
 }
+function drawSegmentTicks(a, b, level, context) {
+    if (level <= 0)
+        return;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    if (!Number.isFinite(length) || length <= screenUnits(2))
+        return;
+    const dir = { x: dx / length, y: dy / length };
+    const perp = { x: -dir.y, y: dir.x };
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const tickLength = screenUnits(TICK_LENGTH_UNITS);
+    const edgeMargin = screenUnits(TICK_MARGIN_UNITS);
+    const maxOffset = Math.max(0, length / 2 - edgeMargin);
+    const rawStep = level === 1 ? 0 : screenUnits(TICK_SPACING_UNITS);
+    const maxStep = maxOffset * 2 / Math.max(1, level - 1);
+    const step = level === 1 ? 0 : Math.min(rawStep, maxStep);
+    context.save();
+    context.setLineDash([]);
+    context.lineCap = 'round';
+    for (let i = 0; i < level; i++) {
+        const offset = step * (i - (level - 1) / 2);
+        const clampedOffset = clamp(offset, -maxOffset, maxOffset);
+        const base = {
+            x: mid.x + dir.x * clampedOffset,
+            y: mid.y + dir.y * clampedOffset
+        };
+        const start = {
+            x: base.x + perp.x * (tickLength / 2),
+            y: base.y + perp.y * (tickLength / 2)
+        };
+        const end = {
+            x: base.x - perp.x * (tickLength / 2),
+            y: base.y - perp.y * (tickLength / 2)
+        };
+        context.beginPath();
+        context.moveTo(start.x, start.y);
+        context.lineTo(end.x, end.y);
+        context.stroke();
+    }
+    context.restore();
+}
+function drawArcTicks(center, radius, start, end, clockwise, level, context) {
+    if (level <= 0 || radius <= 0)
+        return;
+    let span = clockwise ? (start - end + Math.PI * 2) % (Math.PI * 2) : (end - start + Math.PI * 2) % (Math.PI * 2);
+    if (span < 1e-4)
+        span = Math.PI * 2;
+    const dir = clockwise ? -1 : 1;
+    const mid = clockwise ? normalizeAngle(start - span / 2) : normalizeAngle(start + span / 2);
+    const tickLength = screenUnits(TICK_LENGTH_UNITS);
+    const margin = Math.min(span / 4, screenUnits(TICK_MARGIN_UNITS) / Math.max(radius, 1e-3));
+    const maxAngleOffset = Math.max(0, span / 2 - margin);
+    const rawStep = level === 1 ? 0 : screenUnits(TICK_SPACING_UNITS) / Math.max(radius, 1e-3);
+    const maxStep = maxAngleOffset * 2 / Math.max(1, level - 1);
+    const step = level === 1 ? 0 : Math.min(rawStep, maxStep);
+    context.save();
+    context.setLineDash([]);
+    context.lineCap = 'round';
+    for (let i = 0; i < level; i++) {
+        const offset = step * (i - (level - 1) / 2);
+        const clampedOffset = clamp(offset, -maxAngleOffset, maxAngleOffset);
+        const angle = normalizeAngle(mid + dir * clampedOffset);
+        const base = {
+            x: center.x + Math.cos(angle) * radius,
+            y: center.y + Math.sin(angle) * radius
+        };
+        const tangent = { x: -Math.sin(angle), y: Math.cos(angle) };
+        const startPt = {
+            x: base.x + tangent.x * (tickLength / 2),
+            y: base.y + tangent.y * (tickLength / 2)
+        };
+        const endPt = {
+            x: base.x - tangent.x * (tickLength / 2),
+            y: base.y - tangent.y * (tickLength / 2)
+        };
+        context.beginPath();
+        context.moveTo(startPt.x, startPt.y);
+        context.lineTo(endPt.x, endPt.y);
+        context.stroke();
+    }
+    context.restore();
+}
+function drawCircleTicks(center, radius, level, context) {
+    drawArcTicks(center, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2, false, level, context);
+}
 function currentHitRadius(multiplier = 1) {
     return (HIT_RADIUS * multiplier) / zoomFactor;
 }
@@ -5116,6 +5222,168 @@ function adjustLineWidth(delta) {
     applyStyleFromInputs();
     updateLineWidthControls();
 }
+function getTickStateForSelection(labelEditing) {
+    if (labelEditing)
+        return { available: false, state: 0, mixed: false };
+    if (selectedLineIndex !== null || selectedPolygonIndex !== null) {
+        const lines = new Set();
+        if (selectedLineIndex !== null)
+            lines.add(selectedLineIndex);
+        if (selectedPolygonIndex !== null) {
+            const poly = model.polygons[selectedPolygonIndex];
+            poly?.lines.forEach((li) => lines.add(li));
+        }
+        const ticks = [];
+        lines.forEach((lineIdx) => {
+            const line = model.lines[lineIdx];
+            if (!line)
+                return;
+            const segCount = Math.max(0, line.points.length - 1);
+            ensureSegmentStylesForLine(lineIdx);
+            const allSegments = selectedSegments.size === 0;
+            for (let i = 0; i < segCount; i++) {
+                const key = segmentKey(lineIdx, 'segment', i);
+                if (!allSegments && !selectedSegments.has(key))
+                    continue;
+                const style = line.segmentStyles?.[i] ?? line.style;
+                ticks.push(style.tick ?? 0);
+            }
+        });
+        if (!ticks.length)
+            return { available: true, state: 0, mixed: false };
+        const first = ticks[0];
+        const mixed = ticks.some((t) => t !== first);
+        return { available: true, state: mixed ? 0 : first ?? 0, mixed };
+    }
+    if (selectedCircleIndex !== null) {
+        const circleIdx = selectedCircleIndex;
+        const arcs = circleArcs(circleIdx);
+        ensureArcStyles(circleIdx, arcs.length);
+        const circleStyle = model.circles[circleIdx]?.style;
+        const ticks = [];
+        arcs.forEach((arc, idx) => {
+            const key = arcKey(circleIdx, idx);
+            if (selectedArcSegments.size > 0 && !selectedArcSegments.has(key))
+                return;
+            const baseTick = circleStyle?.tick ?? 0;
+            ticks.push((arc.style.tick ?? baseTick));
+        });
+        if (!ticks.length)
+            return { available: true, state: 0, mixed: false };
+        const first = ticks[0];
+        const mixed = ticks.some((t) => t !== first);
+        return { available: true, state: mixed ? 0 : first ?? 0, mixed };
+    }
+    return { available: false, state: 0, mixed: false };
+}
+function applyTickState(nextTick) {
+    let changed = false;
+    const applyToSegment = (lineIdx, segIdx, tick) => {
+        const line = model.lines[lineIdx];
+        if (!line)
+            return;
+        ensureSegmentStylesForLine(lineIdx);
+        if (!line.segmentStyles)
+            line.segmentStyles = [];
+        const base = line.segmentStyles[segIdx] ?? line.style;
+        line.segmentStyles[segIdx] = { ...base, tick };
+        changed = true;
+    };
+    const applyToLine = (lineIdx, tick) => {
+        const line = model.lines[lineIdx];
+        if (!line)
+            return;
+        ensureSegmentStylesForLine(lineIdx);
+        const segCount = Math.max(0, line.points.length - 1);
+        if (!line.segmentStyles)
+            line.segmentStyles = [];
+        line.style = { ...line.style, tick };
+        changed = true;
+        for (let i = 0; i < segCount; i++) {
+            applyToSegment(lineIdx, i, tick);
+        }
+        line.leftRay = line.leftRay ? { ...line.leftRay, tick } : line.leftRay;
+        line.rightRay = line.rightRay ? { ...line.rightRay, tick } : line.rightRay;
+    };
+    const applyToArc = (circleIdx, arcIdx, tick) => {
+        ensureArcStyles(circleIdx, circleArcs(circleIdx).length);
+        const circle = model.circles[circleIdx];
+        if (!circle.arcStyles)
+            circle.arcStyles = [];
+        const base = circle.arcStyles[arcIdx] ?? circle.style;
+        circle.arcStyles[arcIdx] = { ...base, tick };
+        changed = true;
+    };
+    const applyToCircle = (circleIdx, tick) => {
+        const circle = model.circles[circleIdx];
+        if (!circle)
+            return;
+        ensureArcStyles(circleIdx, circleArcs(circleIdx).length);
+        circle.style = { ...circle.style, tick };
+        if (!circle.arcStyles)
+            circle.arcStyles = [];
+        changed = true;
+        for (let i = 0; i < circle.arcStyles.length; i++) {
+            applyToArc(circleIdx, i, tick);
+        }
+    };
+    if (selectedLineIndex !== null || selectedPolygonIndex !== null) {
+        const lines = new Set();
+        if (selectedLineIndex !== null)
+            lines.add(selectedLineIndex);
+        if (selectedPolygonIndex !== null) {
+            const poly = model.polygons[selectedPolygonIndex];
+            poly?.lines.forEach((li) => lines.add(li));
+        }
+        lines.forEach((lineIdx) => {
+            const line = model.lines[lineIdx];
+            if (!line)
+                return;
+            const segCount = Math.max(0, line.points.length - 1);
+            const specificSegments = selectedSegments.size > 0;
+            if (!specificSegments) {
+                applyToLine(lineIdx, nextTick);
+                changed = true;
+            }
+            else {
+                for (let i = 0; i < segCount; i++) {
+                    const key = segmentKey(lineIdx, 'segment', i);
+                    if (selectedSegments.has(key))
+                        applyToSegment(lineIdx, i, nextTick);
+                }
+            }
+        });
+    }
+    else if (selectedCircleIndex !== null) {
+        const circleIdx = selectedCircleIndex;
+        const arcs = circleArcs(circleIdx);
+        const specificArcs = selectedArcSegments.size > 0;
+        if (!specificArcs) {
+            applyToCircle(circleIdx, nextTick);
+            changed = true;
+        }
+        else {
+            arcs.forEach((arc, idx) => {
+                const key = arcKey(circleIdx, idx);
+                if (selectedArcSegments.has(key))
+                    applyToArc(circleIdx, idx, nextTick);
+            });
+        }
+    }
+    if (changed) {
+        draw();
+        pushHistory();
+        updateStyleMenuValues();
+    }
+}
+function cycleTickState() {
+    const tickInfo = getTickStateForSelection(false);
+    if (!tickInfo.available)
+        return;
+    const current = tickInfo.mixed ? 0 : tickInfo.state;
+    const next = ((current + 1) % 4);
+    applyTickState(next);
+}
 function updateStyleMenuValues() {
     if (!styleColorInput || !styleWidthInput || !styleTypeSelect)
         return;
@@ -5294,8 +5562,31 @@ function updateStyleMenuValues() {
     const showRays = selectedLineIndex !== null && !labelEditing;
     if (styleRayGroup)
         styleRayGroup.style.display = showRays ? 'flex' : 'none';
-    if (styleRayGap)
-        styleRayGap.style.display = showRays ? 'flex' : 'none';
+    const tickInfo = getTickStateForSelection(labelEditing);
+    const tickVisible = tickInfo.available && !labelEditing;
+    if (styleTickGroup)
+        styleTickGroup.style.display = tickVisible ? 'flex' : 'none';
+    if (styleTickButton) {
+        styleTickButton.disabled = !tickVisible;
+        const iconState = (tickInfo.mixed || tickInfo.state === 0 ? 1 : tickInfo.state);
+        const iconMarkup = iconState === 3 ? ICONS.tick3 : iconState === 2 ? ICONS.tick2 : ICONS.tick1;
+        styleTickButton.innerHTML = iconMarkup;
+        styleTickButton.classList.toggle('active', tickInfo.state > 0 && !tickInfo.mixed);
+        styleTickButton.classList.toggle('mixed', tickInfo.mixed);
+        styleTickButton.setAttribute('aria-pressed', tickInfo.state > 0 && !tickInfo.mixed ? 'true' : 'false');
+        styleTickButton.dataset.tickState = tickInfo.mixed ? 'mixed' : String(tickInfo.state);
+        const tickTitle = tickInfo.mixed
+            ? 'Znacznik zgodności: różne'
+            : tickInfo.state === 0
+                ? 'Znacznik zgodności: brak'
+                : tickInfo.state === 1
+                    ? 'Znacznik zgodności: pojedynczy'
+                    : tickInfo.state === 2
+                        ? 'Znacznik zgodności: podwójny'
+                        : 'Znacznik zgodności: potrójny';
+        styleTickButton.title = tickTitle;
+        styleTickButton.setAttribute('aria-label', tickTitle);
+    }
     setRowVisible(styleArcRow, selectedAngleIndex !== null && !labelEditing);
     setRowVisible(styleHideRow, !labelEditing);
     setRowVisible(styleEdgesRow, isLineLike && !labelEditing);
