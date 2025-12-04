@@ -4832,7 +4832,7 @@ function defaultAngleLabelOffset(angleIdx: number): { x: number; y: number } {
 function drawLabelText(label: Label, pos: { x: number; y: number }, selected = false) {
   if (!ctx) return;
   ctx.save();
-  ctx.setTransform(dpr, 0, 0, dpr, panOffset.x * dpr, panOffset.y * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const screenPos = worldToCanvas(pos.x, pos.y);
   ctx.translate(screenPos.x, screenPos.y);
   ctx.font = `${12}px sans-serif`;
