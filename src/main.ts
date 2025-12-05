@@ -461,7 +461,8 @@ type Mode =
   | 'parallelLine'
   | 'ngon'
   | 'label'
-  | 'handwriting';
+  | 'handwriting'
+  | 'multiselect';
 
 const dpr = window.devicePixelRatio || 1;
 const HIT_RADIUS = 16;
@@ -570,6 +571,17 @@ let selectedInkStrokeIndex: number | null = null;
 let selectedLabel: { kind: 'point' | 'line' | 'angle' | 'free'; id: number } | null = null;
 const selectedSegments = new Set<string>();
 const selectedArcSegments = new Set<string>();
+
+// Multi-selection
+const multiSelectedPoints = new Set<number>();
+const multiSelectedLines = new Set<number>();
+const multiSelectedCircles = new Set<number>();
+const multiSelectedAngles = new Set<number>();
+const multiSelectedPolygons = new Set<number>();
+const multiSelectedInkStrokes = new Set<number>();
+let multiselectBoxStart: { x: number; y: number } | null = null;
+let multiselectBoxEnd: { x: number; y: number } | null = null;
+
 let mode: Mode = 'move';
 let segmentStartIndex: number | null = null;
 let segmentStartTemporary = false;
@@ -589,6 +601,7 @@ let hoverPointIndex: number | null = null;
 let strokeColorInput: HTMLInputElement | null = null;
 let modeAddBtn: HTMLButtonElement | null = null;
 let modeMoveBtn: HTMLButtonElement | null = null;
+let modeMultiselectBtn: HTMLButtonElement | null = null;
 let modeSegmentBtn: HTMLButtonElement | null = null;
 let modeParallelBtn: HTMLButtonElement | null = null;
 let modePerpBtn: HTMLButtonElement | null = null;
@@ -636,6 +649,7 @@ type CircleDragContext = {
 };
 let circleDragContext: CircleDragContext | null = null;
 let draggingSelection = false;
+let draggingMultiSelection = false;
 let dragStart = { x: 0, y: 0 };
 type ResizeContext = {
   lineIdx: number;
@@ -678,6 +692,9 @@ let deleteBtn: HTMLButtonElement | null = null;
 let copyStyleBtn: HTMLButtonElement | null = null;
 let copyStyleActive = false;
 let copiedStyle: CopiedStyle | null = null;
+let multiMoveBtn: HTMLButtonElement | null = null;
+let multiCloneBtn: HTMLButtonElement | null = null;
+let multiMoveActive = false;
 let showHidden = false;
 let zoomMenuBtn: HTMLButtonElement | null = null;
 let zoomMenuContainer: HTMLElement | null = null;
@@ -1276,6 +1293,68 @@ function resetLabelState() {
   freeGreekIdx = [];
 }
 
+function clearMultiSelection() {
+  multiSelectedPoints.clear();
+  multiSelectedLines.clear();
+  multiSelectedCircles.clear();
+  multiSelectedAngles.clear();
+  multiSelectedPolygons.clear();
+  multiSelectedInkStrokes.clear();
+  multiselectBoxStart = null;
+  multiselectBoxEnd = null;
+}
+
+function isPointInBox(p: { x: number; y: number }, box: { x1: number; y1: number; x2: number; y2: number }): boolean {
+  return p.x >= box.x1 && p.x <= box.x2 && p.y >= box.y1 && p.y <= box.y2;
+}
+
+function selectObjectsInBox(box: { x1: number; y1: number; x2: number; y2: number }) {
+  model.points.forEach((p, idx) => {
+    if (isPointInBox(p, box)) multiSelectedPoints.add(idx);
+  });
+  
+  model.lines.forEach((line, idx) => {
+    const allInside = line.points.every(pi => {
+      const p = model.points[pi];
+      return p && isPointInBox(p, box);
+    });
+    if (allInside) multiSelectedLines.add(idx);
+  });
+  
+  model.circles.forEach((circle, idx) => {
+    const center = model.points[circle.center];
+    if (center && isPointInBox(center, box)) multiSelectedCircles.add(idx);
+  });
+  
+  model.angles.forEach((ang, idx) => {
+    const v = model.points[ang.vertex];
+    if (v && isPointInBox(v, box)) multiSelectedAngles.add(idx);
+  });
+  
+  model.polygons.forEach((poly, idx) => {
+    const verts = polygonVerticesOrdered(idx);
+    const allInside = verts.every(vi => {
+      const p = model.points[vi];
+      return p && isPointInBox(p, box);
+    });
+    if (allInside) multiSelectedPolygons.add(idx);
+  });
+  
+  model.inkStrokes.forEach((stroke, idx) => {
+    const allInside = stroke.points.every(pt => isPointInBox(pt, box));
+    if (allInside) multiSelectedInkStrokes.add(idx);
+  });
+}
+
+function hasMultiSelection(): boolean {
+  return multiSelectedPoints.size > 0 ||
+         multiSelectedLines.size > 0 ||
+         multiSelectedCircles.size > 0 ||
+         multiSelectedAngles.size > 0 ||
+         multiSelectedPolygons.size > 0 ||
+         multiSelectedInkStrokes.size > 0;
+}
+
 function draw() {
   if (!canvas || !ctx) return;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1697,6 +1776,80 @@ function draw() {
     ctx!.restore();
   });
 
+  // Draw multiselect box
+  if (mode === 'multiselect' && multiselectBoxStart && multiselectBoxEnd) {
+    ctx!.save();
+    ctx!.strokeStyle = THEME.highlight;
+    ctx!.lineWidth = renderWidth(2);
+    ctx!.setLineDash([4, 4]);
+    ctx!.fillStyle = THEME.highlight + '20';
+    const x1 = Math.min(multiselectBoxStart.x, multiselectBoxEnd.x);
+    const y1 = Math.min(multiselectBoxStart.y, multiselectBoxEnd.y);
+    const w = Math.abs(multiselectBoxEnd.x - multiselectBoxStart.x);
+    const h = Math.abs(multiselectBoxEnd.y - multiselectBoxStart.y);
+    ctx!.fillRect(x1, y1, w, h);
+    ctx!.strokeRect(x1, y1, w, h);
+    ctx!.setLineDash([]);
+    ctx!.restore();
+  }
+
+  // Highlight multiselected objects
+  if (mode === 'multiselect') {
+    ctx!.save();
+    ctx!.strokeStyle = THEME.highlight;
+    ctx!.lineWidth = renderWidth(3);
+    ctx!.setLineDash([6, 3]);
+    
+    multiSelectedPoints.forEach(idx => {
+      const p = model.points[idx];
+      if (!p) return;
+      ctx!.beginPath();
+      ctx!.arc(p.x, p.y, screenUnits(12), 0, Math.PI * 2);
+      ctx!.stroke();
+    });
+    
+    multiSelectedLines.forEach(idx => {
+      const line = model.lines[idx];
+      if (!line) return;
+      line.points.forEach((pi, i) => {
+        if (i === 0) return;
+        const a = model.points[line.points[i - 1]];
+        const b = model.points[pi];
+        if (!a || !b) return;
+        ctx!.beginPath();
+        ctx!.moveTo(a.x, a.y);
+        ctx!.lineTo(b.x, b.y);
+        ctx!.stroke();
+      });
+    });
+    
+    multiSelectedCircles.forEach(idx => {
+      const circle = model.circles[idx];
+      if (!circle) return;
+      const center = model.points[circle.center];
+      if (!center) return;
+      const radius = circleRadius(circle);
+      ctx!.beginPath();
+      ctx!.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      ctx!.stroke();
+    });
+    
+    multiSelectedAngles.forEach(idx => {
+      const ang = model.angles[idx];
+      if (!ang) return;
+      const geom = angleGeometry(ang);
+      if (!geom) return;
+      const v = model.points[ang.vertex];
+      if (!v) return;
+      ctx!.beginPath();
+      ctx!.arc(v.x, v.y, geom.radius, geom.start, geom.end, geom.clockwise);
+      ctx!.stroke();
+    });
+    
+    ctx!.setLineDash([]);
+    ctx!.restore();
+  }
+
   drawDebugLabels();
   renderDebugPanel();
 }
@@ -1793,6 +1946,12 @@ function endInkStroke(pointerId: number) {
 
 function setMode(next: Mode) {
   mode = next;
+  
+  // Clear multiselection when leaving multiselect mode
+  if (mode !== 'multiselect') {
+    clearMultiSelection();
+  }
+  
   if (mode === 'segment' && selectedPointIndex !== null) {
     segmentStartIndex = selectedPointIndex;
     segmentStartTemporary = false;
@@ -3019,6 +3178,113 @@ function handleCanvasClick(ev: PointerEvent) {
     pushHistory();
     maybeRevertMode();
     updateSelectionButtons();
+  } else if (mode === 'multiselect') {
+    const { x, y } = canvasToWorld(ev.clientX, ev.clientY);
+    
+    // If move mode is active, start dragging
+    if (multiMoveActive && hasMultiSelection()) {
+      draggingMultiSelection = true;
+      dragStart = { x, y };
+      draw();
+      return;
+    }
+    
+    // Start drawing selection box
+    multiselectBoxStart = { x, y };
+    multiselectBoxEnd = { x, y };
+    
+    // Check if clicking on existing object to toggle selection (only if not in move mode)
+    if (!multiMoveActive) {
+      const pointHit = findPoint({ x, y });
+      const lineHit = findLine({ x, y });
+      const circleHit = findCircle({ x, y }, currentHitRadius(), false);
+      const angleHit = findAngleAt({ x, y }, currentHitRadius(1.5));
+      const inkHit = findInkStrokeAt({ x, y });
+      const polyHit = lineHit ? polygonForLine(lineHit.line) : null;
+      
+      if (pointHit !== null) {
+        if (multiSelectedPoints.has(pointHit)) {
+          multiSelectedPoints.delete(pointHit);
+        } else {
+          multiSelectedPoints.add(pointHit);
+        }
+        multiselectBoxStart = null;
+        multiselectBoxEnd = null;
+        draw();
+        updateSelectionButtons();
+        return;
+      }
+      
+      if (lineHit !== null) {
+        const lineIdx = lineHit.line;
+        if (multiSelectedLines.has(lineIdx)) {
+          multiSelectedLines.delete(lineIdx);
+        } else {
+          multiSelectedLines.add(lineIdx);
+        }
+        multiselectBoxStart = null;
+        multiselectBoxEnd = null;
+        draw();
+        updateSelectionButtons();
+        return;
+      }
+      
+      if (circleHit !== null) {
+        const circleIdx = circleHit.circle;
+        if (multiSelectedCircles.has(circleIdx)) {
+          multiSelectedCircles.delete(circleIdx);
+        } else {
+          multiSelectedCircles.add(circleIdx);
+        }
+        multiselectBoxStart = null;
+        multiselectBoxEnd = null;
+        draw();
+        updateSelectionButtons();
+        return;
+      }
+      
+      if (angleHit !== null) {
+        if (multiSelectedAngles.has(angleHit)) {
+          multiSelectedAngles.delete(angleHit);
+        } else {
+          multiSelectedAngles.add(angleHit);
+        }
+        multiselectBoxStart = null;
+        multiselectBoxEnd = null;
+        draw();
+        updateSelectionButtons();
+        return;
+      }
+      
+      if (polyHit !== null) {
+        if (multiSelectedPolygons.has(polyHit)) {
+          multiSelectedPolygons.delete(polyHit);
+        } else {
+          multiSelectedPolygons.add(polyHit);
+        }
+        multiselectBoxStart = null;
+        multiselectBoxEnd = null;
+        draw();
+        updateSelectionButtons();
+        return;
+      }
+      
+      if (inkHit !== null) {
+        if (multiSelectedInkStrokes.has(inkHit)) {
+          multiSelectedInkStrokes.delete(inkHit);
+        } else {
+          multiSelectedInkStrokes.add(inkHit);
+        }
+        multiselectBoxStart = null;
+        multiselectBoxEnd = null;
+        draw();
+        updateSelectionButtons();
+        return;
+      }
+    }
+    
+    // If not clicking on object, will draw selection box (handled in pointer move)
+    draw();
   } else if (mode === 'move') {
     // Jeśli aktywny jest tryb kopiowania stylu, zastosuj styl do klikniętego obiektu
     if (copyStyleActive && copiedStyle) {
@@ -3395,6 +3661,7 @@ function initRuntime() {
   modeAddBtn = document.getElementById('modeAdd') as HTMLButtonElement | null;
   modeLabelBtn = document.getElementById('modeLabel') as HTMLButtonElement | null;
   modeMoveBtn = document.getElementById('modeMove') as HTMLButtonElement | null;
+  modeMultiselectBtn = document.getElementById('modeMultiselect') as HTMLButtonElement | null;
   modeSegmentBtn = document.getElementById('modeSegment') as HTMLButtonElement | null;
   modeParallelBtn = document.getElementById('modeParallel') as HTMLButtonElement | null;
   modePerpBtn = document.getElementById('modePerpendicular') as HTMLButtonElement | null;
@@ -3425,6 +3692,8 @@ function initRuntime() {
   hideBtn = document.getElementById('hideButton') as HTMLButtonElement | null;
   deleteBtn = document.getElementById('deletePoint') as HTMLButtonElement | null;
   copyStyleBtn = document.getElementById('copyStyleBtn') as HTMLButtonElement | null;
+  multiMoveBtn = document.getElementById('multiMoveBtn') as HTMLButtonElement | null;
+  multiCloneBtn = document.getElementById('multiCloneBtn') as HTMLButtonElement | null;
   zoomMenuBtn = document.getElementById('zoomMenu') as HTMLButtonElement | null;
   zoomMenuContainer = zoomMenuBtn?.parentElement ?? null;
   zoomMenuDropdown = zoomMenuContainer?.querySelector('.dropdown-menu') as HTMLElement | null;
@@ -3557,6 +3826,15 @@ function initRuntime() {
       appendInkStrokePoint(ev);
       return;
     }
+    
+    // Handle multiselect box drawing
+    if (mode === 'multiselect' && multiselectBoxStart && ev.buttons === 1) {
+      const { x, y } = canvasToWorld(ev.clientX, ev.clientY);
+      multiselectBoxEnd = { x, y };
+      draw();
+      return;
+    }
+    
     const { x, y } = toPoint(ev);
     activeAxisSnap = null;
     if (resizingLine) {
@@ -3620,6 +3898,57 @@ function initRuntime() {
           break;
         }
       }
+      movedDuringDrag = true;
+      draw();
+    } else if (draggingMultiSelection && mode === 'multiselect') {
+      const dx = x - dragStart.x;
+      const dy = y - dragStart.y;
+      const movedPointIndices = new Set<number>();
+      
+      // Move all selected circles (collect all their points)
+      multiSelectedCircles.forEach(ci => {
+        const circle = model.circles[ci];
+        if (circle) {
+          // Collect center
+          if (circle.center !== null) {
+            movedPointIndices.add(circle.center);
+          }
+          // Collect radius point
+          if (circle.radius_point !== null) {
+            movedPointIndices.add(circle.radius_point);
+          }
+          // Collect perimeter points
+          circle.points.forEach(pi => {
+            movedPointIndices.add(pi);
+          });
+        }
+      });
+      
+      // Add explicitly selected points
+      multiSelectedPoints.forEach(idx => {
+        movedPointIndices.add(idx);
+      });
+      
+      // Move all collected points once
+      movedPointIndices.forEach(idx => {
+        const p = model.points[idx];
+        if (p && isPointDraggable(p)) {
+          model.points[idx] = { ...p, x: p.x + dx, y: p.y + dy };
+        }
+      });
+      
+      // Move all selected ink strokes
+      multiSelectedInkStrokes.forEach(si => {
+        const stroke = model.inkStrokes[si];
+        if (stroke) {
+          model.inkStrokes[si] = {
+            ...stroke,
+            points: stroke.points.map(pt => ({ ...pt, x: pt.x + dx, y: pt.y + dy }))
+          };
+        }
+      });
+      
+      dragStart = { x, y };
       movedDuringDrag = true;
       draw();
     } else if (draggingSelection && mode === 'move') {
@@ -4139,9 +4468,28 @@ function initRuntime() {
         /* ignore release errors */
       }
     }
+    
+    // Finish multiselect box
+    if (mode === 'multiselect' && multiselectBoxStart && multiselectBoxEnd) {
+      const x1 = Math.min(multiselectBoxStart.x, multiselectBoxEnd.x);
+      const y1 = Math.min(multiselectBoxStart.y, multiselectBoxEnd.y);
+      const x2 = Math.max(multiselectBoxStart.x, multiselectBoxEnd.x);
+      const y2 = Math.max(multiselectBoxStart.y, multiselectBoxEnd.y);
+      
+      if (Math.abs(x2 - x1) > 5 || Math.abs(y2 - y1) > 5) {
+        selectObjectsInBox({ x1, y1, x2, y2 });
+        updateSelectionButtons();
+      }
+      
+      multiselectBoxStart = null;
+      multiselectBoxEnd = null;
+      draw();
+    }
+    
     endInkStroke(ev.pointerId);
     resizingLine = null;
     draggingSelection = false;
+    draggingMultiSelection = false;
     lineDragContext = null;
     draggingLabel = null;
     draggingCircleCenterAngles = null;
@@ -4207,6 +4555,7 @@ function initRuntime() {
     stickyTool = null;
     if (mode !== 'move') setMode('move');
   });
+  modeMultiselectBtn?.addEventListener('click', () => handleToolClick('multiselect'));
   lineWidthDecreaseBtn?.addEventListener('click', () => adjustLineWidth(-1));
   lineWidthIncreaseBtn?.addEventListener('click', () => adjustLineWidth(1));
   colorSwatchButtons.forEach((btn) => {
@@ -4270,6 +4619,54 @@ function initRuntime() {
     setTheme(nextTheme);
   });
   hideBtn?.addEventListener('click', () => {
+    // Handle multiselection hide
+    if (hasMultiSelection()) {
+      multiSelectedPoints.forEach(idx => {
+        const p = model.points[idx];
+        if (p) {
+          model.points[idx] = { ...p, style: { ...p.style, hidden: !p.style.hidden } };
+        }
+      });
+      
+      multiSelectedLines.forEach(idx => {
+        if (model.lines[idx]) {
+          model.lines[idx].hidden = !model.lines[idx].hidden;
+        }
+      });
+      
+      multiSelectedCircles.forEach(idx => {
+        if (model.circles[idx]) {
+          model.circles[idx].hidden = !model.circles[idx].hidden;
+        }
+      });
+      
+      multiSelectedAngles.forEach(idx => {
+        const angle = model.angles[idx];
+        if (angle) {
+          model.angles[idx] = { ...angle, hidden: !angle.hidden };
+        }
+      });
+      
+      multiSelectedPolygons.forEach(idx => {
+        const poly = model.polygons[idx];
+        poly?.lines.forEach(li => {
+          if (model.lines[li]) model.lines[li].hidden = !model.lines[li].hidden;
+        });
+      });
+      
+      multiSelectedInkStrokes.forEach(idx => {
+        const stroke = model.inkStrokes[idx];
+        if (stroke) {
+          model.inkStrokes[idx] = { ...stroke, hidden: !stroke.hidden };
+        }
+      });
+      
+      draw();
+      updateSelectionButtons();
+      pushHistory();
+      return;
+    }
+    
     if (selectedInkStrokeIndex !== null) {
       const stroke = model.inkStrokes[selectedInkStrokeIndex];
       if (stroke) {
@@ -4324,8 +4721,210 @@ function initRuntime() {
       updateSelectionButtons();
     }
   });
+  
+  multiMoveBtn?.addEventListener('click', () => {
+    if (!multiMoveActive) {
+      multiMoveActive = true;
+      multiMoveBtn?.classList.add('active');
+      multiMoveBtn?.setAttribute('aria-pressed', 'true');
+    } else {
+      multiMoveActive = false;
+      multiMoveBtn?.classList.remove('active');
+      multiMoveBtn?.setAttribute('aria-pressed', 'false');
+    }
+  });
+  
+  multiCloneBtn?.addEventListener('click', () => {
+    if (!hasMultiSelection()) return;
+    
+    // Clone selected objects
+    const pointRemap = new Map<number, number>();
+    
+    // Clone points
+    multiSelectedPoints.forEach(idx => {
+      const p = model.points[idx];
+      if (p) {
+        const newPoint = { ...p, id: nextId('point', model) };
+        model.points.push(newPoint);
+        const newIdx = model.points.length - 1;
+        pointRemap.set(idx, newIdx);
+        registerIndex(model, 'point', newPoint.id, newIdx);
+      }
+    });
+    
+    // Clone lines
+    const lineRemap = new Map<number, number>();
+    multiSelectedLines.forEach(idx => {
+      const line = model.lines[idx];
+      if (line) {
+        const newPoints = line.points.map(pi => pointRemap.get(pi) ?? pi);
+        const newLine = { 
+          ...line, 
+          id: nextId('line', model),
+          points: newPoints,
+          segmentStyles: line.segmentStyles?.map(s => ({ ...s })),
+          segmentKeys: line.segmentKeys ? [...line.segmentKeys] : undefined
+        };
+        model.lines.push(newLine);
+        const newIdx = model.lines.length - 1;
+        lineRemap.set(idx, newIdx);
+        registerIndex(model, 'line', newLine.id, newIdx);
+      }
+    });
+    
+    // Clone circles
+    multiSelectedCircles.forEach(idx => {
+      const circle = model.circles[idx];
+      if (circle) {
+        const newCenter = pointRemap.get(circle.center) ?? circle.center;
+        const newPoints = circle.points.map(pi => pointRemap.get(pi) ?? pi);
+        const newCircle = {
+          ...circle,
+          id: nextId('circle', model),
+          center: newCenter,
+          points: newPoints,
+          arcStyles: circle.arcStyles?.map(s => ({ ...s }))
+        };
+        if (circle.circle_kind === 'center-radius') {
+          newCircle.radius_point = circle.radius_point !== undefined ? (pointRemap.get(circle.radius_point) ?? circle.radius_point) : circle.radius_point;
+        }
+        model.circles.push(newCircle);
+        registerIndex(model, 'circle', newCircle.id, model.circles.length - 1);
+      }
+    });
+    
+    // Clone angles
+    multiSelectedAngles.forEach(idx => {
+      const ang = model.angles[idx];
+      if (ang) {
+        const newAngle = {
+          ...ang,
+          id: nextId('angle', model),
+          leg1: { ...ang.leg1, line: lineRemap.get(ang.leg1.line) ?? ang.leg1.line },
+          leg2: { ...ang.leg2, line: lineRemap.get(ang.leg2.line) ?? ang.leg2.line },
+          vertex: pointRemap.get(ang.vertex) ?? ang.vertex
+        };
+        model.angles.push(newAngle);
+        registerIndex(model, 'angle', newAngle.id, model.angles.length - 1);
+      }
+    });
+    
+    // Clone ink strokes
+    multiSelectedInkStrokes.forEach(idx => {
+      const stroke = model.inkStrokes[idx];
+      if (stroke) {
+        const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `ink-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        const newStroke = {
+          ...stroke,
+          id,
+          points: stroke.points.map(pt => ({ ...pt }))
+        };
+        model.inkStrokes.push(newStroke);
+      }
+    });
+    
+    // Clear old selection and select cloned objects
+    const newPointSelection = new Set<number>();
+    pointRemap.forEach((newIdx, _) => newPointSelection.add(newIdx));
+    
+    const newLineSelection = new Set<number>();
+    lineRemap.forEach((newIdx, _) => newLineSelection.add(newIdx));
+    
+    multiSelectedPoints.clear();
+    multiSelectedLines.clear();
+    multiSelectedCircles.clear();
+    multiSelectedAngles.clear();
+    multiSelectedInkStrokes.clear();
+    
+    newPointSelection.forEach(idx => multiSelectedPoints.add(idx));
+    newLineSelection.forEach(idx => multiSelectedLines.add(idx));
+    
+    // Activate move mode
+    multiMoveActive = true;
+    multiMoveBtn?.classList.add('active');
+    multiMoveBtn?.setAttribute('aria-pressed', 'true');
+    
+    updateSelectionButtons();
+    draw();
+    pushHistory();
+  });
+  
   deleteBtn?.addEventListener('click', () => {
     let changed = false;
+    
+    // Handle multiselection delete
+    if (hasMultiSelection()) {
+      multiSelectedInkStrokes.forEach(idx => {
+        if (idx >= 0 && idx < model.inkStrokes.length) {
+          model.inkStrokes[idx].hidden = true;
+          changed = true;
+        }
+      });
+      
+      const pointsToRemove = Array.from(multiSelectedPoints);
+      if (pointsToRemove.length > 0) {
+        removePointsAndRelated(pointsToRemove, true);
+        changed = true;
+      }
+      
+      const linesToRemove = Array.from(multiSelectedLines);
+      linesToRemove.sort((a, b) => b - a);
+      linesToRemove.forEach(idx => {
+        const line = model.lines[idx];
+        if (line?.label) reclaimLabel(line.label);
+        model.lines.splice(idx, 1);
+        changed = true;
+      });
+      if (linesToRemove.length > 0) {
+        const remap = new Map<number, number>();
+        model.lines.forEach((_, idx) => remap.set(idx, idx));
+        remapPolygons(remap);
+      }
+      
+      const circlesToRemove = Array.from(multiSelectedCircles);
+      circlesToRemove.sort((a, b) => b - a);
+      circlesToRemove.forEach(idx => {
+        const circle = model.circles[idx];
+        if (circle) {
+          if (circle.label) reclaimLabel(circle.label);
+          model.circles.splice(idx, 1);
+          changed = true;
+        }
+      });
+      
+      const anglesToRemove = Array.from(multiSelectedAngles);
+      anglesToRemove.sort((a, b) => b - a);
+      anglesToRemove.forEach(idx => {
+        const angle = model.angles[idx];
+        if (angle?.label) reclaimLabel(angle.label);
+        model.angles.splice(idx, 1);
+        changed = true;
+      });
+      
+      const polygonsToRemove = Array.from(multiSelectedPolygons);
+      polygonsToRemove.sort((a, b) => b - a);
+      polygonsToRemove.forEach(idx => {
+        const poly = model.polygons[idx];
+        if (poly) {
+          poly.lines.forEach(li => {
+            const line = model.lines[li];
+            if (line?.label) reclaimLabel(line.label);
+          });
+          model.polygons.splice(idx, 1);
+          changed = true;
+        }
+      });
+      
+      clearMultiSelection();
+      updateSelectionButtons();
+      if (changed) {
+        rebuildIndexMaps();
+        draw();
+        pushHistory();
+      }
+      return;
+    }
+    
     if (selectedInkStrokeIndex !== null) {
       if (selectedInkStrokeIndex >= 0 && selectedInkStrokeIndex < model.inkStrokes.length) {
         model.inkStrokes.splice(selectedInkStrokeIndex, 1);
@@ -5571,6 +6170,7 @@ function updateToolButtons() {
   applyClasses(modeSymmetricBtn, 'symmetric');
   applyClasses(modeParallelLineBtn, 'parallelLine');
   applyClasses(modeNgonBtn, 'ngon');
+  applyClasses(modeMultiselectBtn, 'multiselect');
   applyClasses(document.getElementById('modeCircle') as HTMLButtonElement | null, 'circle');
   applyClasses(modeHandwritingBtn, 'handwriting');
   if (modeMoveBtn) {
@@ -5599,7 +6199,8 @@ function updateSelectionButtons() {
     selectedArcSegments.size > 0 ||
     selectedAngleIndex !== null ||
     selectedInkStrokeIndex !== null ||
-    selectedLabel !== null;
+    selectedLabel !== null ||
+    hasMultiSelection();
   if (hideBtn) {
     hideBtn.style.display = anySelection ? 'inline-flex' : 'none';
   }
@@ -5607,8 +6208,8 @@ function updateSelectionButtons() {
     deleteBtn.style.display = anySelection ? 'inline-flex' : 'none';
   }
   if (copyStyleBtn) {
-    const canCopyStyle = selectedPointIndex !== null || selectedLineIndex !== null || 
-      selectedCircleIndex !== null || selectedAngleIndex !== null || selectedInkStrokeIndex !== null;
+    const canCopyStyle = mode !== 'multiselect' && (selectedPointIndex !== null || selectedLineIndex !== null || 
+      selectedCircleIndex !== null || selectedAngleIndex !== null || selectedInkStrokeIndex !== null);
     copyStyleBtn.style.display = canCopyStyle ? 'inline-flex' : 'none';
     if (copyStyleActive) {
       copyStyleBtn.classList.add('active');
@@ -5618,8 +6219,18 @@ function updateSelectionButtons() {
       copyStyleBtn.setAttribute('aria-pressed', 'false');
     }
   }
+  
+  // Show multiselect move and clone buttons
+  const showMultiButtons = mode === 'multiselect' && hasMultiSelection();
+  if (multiMoveBtn) {
+    multiMoveBtn.style.display = showMultiButtons ? 'inline-flex' : 'none';
+  }
+  if (multiCloneBtn) {
+    multiCloneBtn.style.display = showMultiButtons ? 'inline-flex' : 'none';
+  }
+  
   if (styleMenuContainer) {
-    styleMenuContainer.style.display = anySelection ? 'inline-flex' : 'none';
+    styleMenuContainer.style.display = anySelection && !hasMultiSelection() ? 'inline-flex' : 'none';
     if (!anySelection) {
       closeStyleMenu();
       styleMenuSuppressed = false;
