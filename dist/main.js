@@ -4029,32 +4029,53 @@ function tryApplyLabelToSelection() {
     }
     else if (selectedPolygonIndex !== null) {
         const verts = polygonVerticesOrdered(selectedPolygonIndex).filter((vi) => !model.points[vi]?.label);
-        verts.forEach((vi, i) => {
-            const idx = labelUpperIdx + i;
-            const text = seqLetter(idx, UPPER_SEQ);
+        verts.forEach((vi) => {
+            const { text, seq } = nextUpper();
             model.points[vi].label = {
                 text,
                 color,
                 offset: defaultPointLabelOffset(vi),
                 fontSize: LABEL_FONT_DEFAULT,
-                seq: { kind: 'upper', idx }
+                seq
             };
         });
         if (verts.length) {
-            labelUpperIdx += verts.length;
             changed = true;
         }
     }
-    else if (selectedLineIndex !== null && !model.lines[selectedLineIndex].label) {
-        const { text, seq } = nextLower();
-        model.lines[selectedLineIndex].label = {
-            text,
-            color,
-            offset: defaultLineLabelOffset(selectedLineIndex),
-            fontSize: LABEL_FONT_DEFAULT,
-            seq
-        };
-        changed = true;
+    else if (selectedLineIndex !== null) {
+        // Jeśli zaznaczone są wierzchołki, etykietuj je
+        if (selectionVertices) {
+            const line = model.lines[selectedLineIndex];
+            if (line) {
+                const verts = line.points.filter((vi) => !model.points[vi]?.label);
+                verts.forEach((vi) => {
+                    const { text, seq } = nextUpper();
+                    model.points[vi].label = {
+                        text,
+                        color,
+                        offset: defaultPointLabelOffset(vi),
+                        fontSize: LABEL_FONT_DEFAULT,
+                        seq
+                    };
+                });
+                if (verts.length) {
+                    changed = true;
+                }
+            }
+        }
+        // Jeśli zaznaczone są krawędzie (lub oba), etykietuj linię
+        if (selectionEdges && !model.lines[selectedLineIndex].label) {
+            const { text, seq } = nextLower();
+            model.lines[selectedLineIndex].label = {
+                text,
+                color,
+                offset: defaultLineLabelOffset(selectedLineIndex),
+                fontSize: LABEL_FONT_DEFAULT,
+                seq
+            };
+            changed = true;
+        }
     }
     else if (selectedPointIndex !== null && !model.points[selectedPointIndex].label) {
         const { text, seq } = nextUpper();
@@ -7436,6 +7457,12 @@ function removePointsAndRelated(points, removeLines = false) {
             points.push(idx);
         });
     }
+    // Reclaim labels from removed points
+    points.forEach((idx) => {
+        const pt = model.points[idx];
+        if (pt?.label)
+            reclaimLabel(pt.label);
+    });
     removePointsKeepingOrder(points);
 }
 function removeParallelLinesReferencing(lineId) {
