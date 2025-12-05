@@ -81,8 +81,8 @@ button.tool.limit,
 .icon-btn.limit:disabled,
 button.tool.limit:disabled { opacity: 1; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; white-space: nowrap; }
-.icon-btn { width: 44px; height: 44px; padding: 0; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--btn); border: 1px solid var(--btn-border); transition: background 120ms ease, transform 120ms ease, border-color 120ms ease; color: var(--text); }
-.tick-btn { width: 44px; height: 44px; }
+.icon-btn { width: 40px; height: 40px; padding: 0; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border: 1px solid transparent; transition: background 120ms ease, transform 120ms ease, border-color 120ms ease; color: var(--text); }
+.tick-btn { width: 40px; height: 40px; }
 .tick-btn.mixed { box-shadow: inset 0 0 0 2px #fbbf24; }
 .label-greek-btn { width: 36px; height: 36px; font-size: 18px; font-weight: 600; line-height: 1; padding: 0; border-radius: 8px; }
 .label-symbol-btn { font-size: 20px; }
@@ -100,7 +100,7 @@ button.tool.limit:disabled { opacity: 1; }
 #styleMenuContainer .dropdown-menu, #optionsMenuContainer .dropdown-menu { background: transparent; border: none; box-shadow: none; }
 #optionsMenuContainer .dropdown-menu { padding: 6px; min-width: 0; width: auto; gap: 6px; align-items: center; }
 .options-menu { flex-direction: column; }
-.options-menu .icon-btn { width: 44px; height: 44px; }
+.options-menu .icon-btn { width: 40px; height: 40px; }
 .dropdown.open .dropdown-menu { display: flex; }
 .dropdown.open .tool-menu-grid { display: grid; }
 .tool-menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 10px; padding: 10px; }
