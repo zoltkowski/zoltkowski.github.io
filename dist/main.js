@@ -4249,7 +4249,13 @@ function initRuntime() {
         resetLabelState();
         selectedLineIndex = null;
         selectedPointIndex = null;
+        selectedCircleIndex = null;
+        selectedAngleIndex = null;
+        selectedPolygonIndex = null;
+        selectedInkStrokeIndex = null;
         selectedLabel = null;
+        selectedSegments.clear();
+        selectedArcSegments.clear();
         segmentStartIndex = null;
         panOffset = { x: 0, y: 0 };
         zoomFactor = 1;
