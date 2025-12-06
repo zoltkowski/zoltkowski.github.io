@@ -1506,6 +1506,43 @@ function setMode(next) {
     if (copyStyleActive && next !== 'move') {
         copyStyleActive = false;
     }
+    // Reset multi-buttons to main function when switching tools
+    Object.entries(buttonConfig.multiButtons).forEach(([mainId, buttonIds]) => {
+        const currentIndex = multiButtonStates[mainId] || 0;
+        // If we're not on the main (first) function, reset to it
+        if (currentIndex !== 0) {
+            const currentToolId = buttonIds[currentIndex];
+            const currentTool = TOOL_BUTTONS.find(t => t.id === currentToolId);
+            // Check if we're leaving this tool
+            let leavingThisTool = false;
+            if (currentToolId === 'copyStyleBtn') {
+                // copyStyleBtn is being deactivated above if mode !== 'move'
+                leavingThisTool = next !== 'move';
+            }
+            else if (currentTool) {
+                leavingThisTool = next !== currentTool.mode;
+            }
+            if (leavingThisTool) {
+                // Reset to main function
+                multiButtonStates[mainId] = 0;
+                // Update button visual
+                const mainBtn = document.getElementById(mainId);
+                if (mainBtn) {
+                    const firstToolId = buttonIds[0];
+                    const firstTool = TOOL_BUTTONS.find(t => t.id === firstToolId);
+                    if (firstTool) {
+                        const svgElement = mainBtn.querySelector('svg');
+                        if (svgElement) {
+                            svgElement.setAttribute('viewBox', firstTool.viewBox);
+                            svgElement.innerHTML = firstTool.icon;
+                        }
+                        mainBtn.setAttribute('title', firstTool.label);
+                        mainBtn.setAttribute('aria-label', firstTool.label);
+                    }
+                }
+            }
+        }
+    });
     // Hide second row if switching to a mode that's not in the current second row
     if (secondRowVisible && secondRowToolIds.length > 0) {
         const currentToolButton = TOOL_BUTTONS.find(t => t.mode === mode);
