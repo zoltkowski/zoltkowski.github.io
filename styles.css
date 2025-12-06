@@ -82,7 +82,7 @@ button, input, label { font: inherit; }
   transform: translateX(-50%);
   width: 12px;
   height: 2px;
-  background: #3b82f6;
+  background: rgba(128, 128, 128, 0.6);
   border-radius: 1px;
 }
 .label-greek-row { gap: 6px; flex-wrap: wrap; justify-content: flex-start; }
