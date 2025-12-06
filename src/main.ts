@@ -3946,24 +3946,30 @@ function applyButtonConfiguration() {
             newBtn.setAttribute('title', newTool.label);
             newBtn.setAttribute('aria-label', newTool.label);
             
-            // Special handling for copyStyleBtn (it's not a mode tool)
-            if (newToolId === 'copyStyleBtn') {
-              // Trigger copyStyle functionality
-              if (!copyStyleActive) {
-                const style = copyStyleFromSelection();
-                if (style) {
-                  copiedStyle = style;
-                  copyStyleActive = true;
-                  updateSelectionButtons();
-                }
-              } else {
+            // If we cycled back to the first tool, deactivate instead of activating
+            if (newIndex === 0) {
+              // Deactivate
+              if (newToolId === 'copyStyleBtn') {
                 copyStyleActive = false;
                 copiedStyle = null;
                 updateSelectionButtons();
+              } else {
+                setMode('move');
               }
             } else {
-              // Trigger the tool action for mode tools
-              setMode(newTool.mode as Mode);
+              // Activate the new tool
+              if (newToolId === 'copyStyleBtn') {
+                if (!copyStyleActive) {
+                  const style = copyStyleFromSelection();
+                  if (style) {
+                    copiedStyle = style;
+                    copyStyleActive = true;
+                    updateSelectionButtons();
+                  }
+                }
+              } else {
+                setMode(newTool.mode as Mode);
+              }
             }
           }
         } else {
