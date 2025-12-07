@@ -748,6 +748,12 @@ let styleTypeGap: HTMLElement | null = null;
 let labelGreekVisible = false;
 let labelGreekUppercase = false;
 let labelFontDecreaseBtn: HTMLButtonElement | null = null;
+
+// Default folder handle for saving/loading files
+let defaultFolderHandle: FileSystemDirectoryHandle | null = null;
+let selectDefaultFolderBtn: HTMLButtonElement | null = null;
+let clearDefaultFolderBtn: HTMLButtonElement | null = null;
+let defaultFolderPath: HTMLElement | null = null;
 let labelFontIncreaseBtn: HTMLButtonElement | null = null;
 let labelFontSizeDisplay: HTMLElement | null = null;
 let recentColors: string[] = [THEME.defaultStroke];
@@ -5036,7 +5042,7 @@ function loadButtonConfiguration() {
   }
 }
 
-function exportButtonConfiguration() {
+async function exportButtonConfiguration() {
   const config = {
     version: 1,
     buttonOrder: buttonOrder,
@@ -5046,6 +5052,22 @@ function exportButtonConfiguration() {
   
   const json = JSON.stringify(config, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
+  
+  // Try to use File System Access API with default folder
+  if ('showSaveFilePicker' in window && defaultFolderHandle) {
+    try {
+      const fileName = `geometry-config-${new Date().toISOString().slice(0, 10)}.json`;
+      const fileHandle = await defaultFolderHandle.getFileHandle(fileName, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (err) {
+      console.warn('Failed to save config to default folder:', err);
+    }
+  }
+  
+  // Fallback to traditional download
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -5142,6 +5164,9 @@ function initRuntime() {
   exportJsonBtn = document.getElementById('exportJsonBtn') as HTMLButtonElement | null;
   importJsonBtn = document.getElementById('importJsonBtn') as HTMLButtonElement | null;
   importJsonInput = document.getElementById('importJsonInput') as HTMLInputElement | null;
+  selectDefaultFolderBtn = document.getElementById('selectDefaultFolderBtn') as HTMLButtonElement | null;
+  clearDefaultFolderBtn = document.getElementById('clearDefaultFolderBtn') as HTMLButtonElement | null;
+  defaultFolderPath = document.getElementById('defaultFolderPath') as HTMLElement | null;
   clearAllBtn = document.getElementById('clearAll') as HTMLButtonElement | null;
   themeDarkBtn = document.getElementById('themeDark') as HTMLButtonElement | null;
   undoBtn = document.getElementById('undo') as HTMLButtonElement | null;
@@ -6231,6 +6256,53 @@ function initRuntime() {
     }
   }, { passive: false });
 
+  // Default folder selection
+  selectDefaultFolderBtn?.addEventListener('click', async () => {
+    try {
+      if (!('showDirectoryPicker' in window)) {
+        window.alert('Ta funkcja nie jest dostępna w Twojej przeglądarce.');
+        return;
+      }
+      
+      const dirHandle = await (window as any).showDirectoryPicker({
+        mode: 'readwrite'
+      });
+      
+      defaultFolderHandle = dirHandle;
+      
+      // Save to localStorage
+      // Note: We can't directly store the handle, but we can request permission again on load
+      localStorage.setItem('defaultFolderName', dirHandle.name);
+      
+      updateDefaultFolderDisplay();
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        console.error('Failed to select folder:', err);
+      }
+    }
+  });
+  
+  clearDefaultFolderBtn?.addEventListener('click', () => {
+    defaultFolderHandle = null;
+    localStorage.removeItem('defaultFolderName');
+    updateDefaultFolderDisplay();
+  });
+  
+  function updateDefaultFolderDisplay() {
+    if (defaultFolderPath && clearDefaultFolderBtn) {
+      if (defaultFolderHandle) {
+        defaultFolderPath.textContent = defaultFolderHandle.name;
+        clearDefaultFolderBtn.style.display = 'block';
+      } else {
+        defaultFolderPath.textContent = 'Nie wybrano';
+        clearDefaultFolderBtn.style.display = 'none';
+      }
+    }
+  }
+  
+  // Initialize folder display
+  updateDefaultFolderDisplay();
+
   hideBtn?.addEventListener('click', () => {
     // Handle multiselection hide
     if (hasMultiSelection()) {
@@ -7067,11 +7139,32 @@ function initRuntime() {
       window.alert('Nie udało się przygotować pliku PNG.');
     }
   });
-  exportJsonBtn?.addEventListener('click', () => {
+  exportJsonBtn?.addEventListener('click', async () => {
     try {
       const snapshot = serializeCurrentDocument();
       const json = JSON.stringify(snapshot, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
+      
+      // Try to use File System Access API with default folder
+      if ('showSaveFilePicker' in window && defaultFolderHandle) {
+        try {
+          const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const defaultName = `geometry-${stamp}.json`;
+          
+          const fileHandle = await defaultFolderHandle.getFileHandle(defaultName, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          
+          closeZoomMenu();
+          return;
+        } catch (err) {
+          // If saving to default folder fails, fall back to regular save
+          console.warn('Failed to save to default folder:', err);
+        }
+      }
+      
+      // Fallback to traditional download
       const url = URL.createObjectURL(blob);
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
       const defaultName = `geometry-${stamp}`;

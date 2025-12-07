@@ -466,6 +466,28 @@
         <div id="tabGeneral" class="tab-content active">
           <div class="config-section">
             <div style="padding: 12px;">
+              <h3>Domyślny folder</h3>
+              <p class="tab-description">Wybierz folder, w którym będą zapisywane pliki JSON i konfiguracja.</p>
+              <div style="display: flex; gap: 12px; margin-top: 16px; align-items: center;">
+                <button id="selectDefaultFolderBtn" class="icon-btn" title="Wybierz folder" style="padding: 10px 16px; font-size: 14px;">
+                  <svg class="icon" viewBox="0 0 24 24" style="width: 18px; height: 18px; margin-right: 6px;">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Wybierz folder
+                </button>
+                <span id="defaultFolderPath" style="font-size: 13px; color: var(--fg-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  Nie wybrano
+                </span>
+                <button id="clearDefaultFolderBtn" class="icon-btn" title="Wyczyść" style="padding: 8px; display: none;">
+                  <svg class="icon" viewBox="0 0 24 24" style="width: 18px; height: 18px;">
+                    <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="config-section" style="margin-top: 16px;">
+            <div style="padding: 12px;">
               <h3>Eksport i Import</h3>
               <p class="tab-description">Zapisz lub wczytaj pełną konfigurację aplikacji (przyciski, kolejność, ustawienia).</p>
               <div style="display: flex; gap: 12px; margin-top: 16px;">
