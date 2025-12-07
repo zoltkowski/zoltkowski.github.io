@@ -6505,14 +6505,60 @@ function initRuntime() {
       
       const circlesToRemove = Array.from(multiSelectedCircles);
       circlesToRemove.sort((a, b) => b - a);
+      const allCirclePointsToRemove = new Set<number>();
       circlesToRemove.forEach(idx => {
         const circle = model.circles[idx];
         if (circle) {
           if (circle.label) reclaimLabel(circle.label);
+          const circleId = circle.id;
+          
+          // Check center point - only remove if not used as defining point for lines
+          const centerUsedInLines = model.lines.some(line => line.defining_points.includes(circle.center));
+          if (!centerUsedInLines) {
+            allCirclePointsToRemove.add(circle.center);
+          }
+          
+          // Check other points on circle
+          const constrainedPoints = [circle.radius_point, ...circle.points];
+          constrainedPoints.forEach((pid) => {
+            if (circleHasDefiningPoint(circle, pid)) return;
+            const point = model.points[pid];
+            if (!point) return;
+            const hasCircleParent = point.parent_refs.some((pr) => pr.kind === 'circle' && pr.id === circleId);
+            
+            // Only remove if not used as defining point for lines
+            const usedInLines = model.lines.some(line => line.defining_points.includes(pid));
+            if (!usedInLines && (!isCircleThroughPoints(circle) || hasCircleParent)) {
+              allCirclePointsToRemove.add(pid);
+            }
+          });
+          
+          // Remove circle from parent_refs of points that are not being deleted
+          model.points = model.points.map((pt, ptIdx) => {
+            if (allCirclePointsToRemove.has(ptIdx)) return pt;
+            const before = pt.parent_refs || [];
+            const afterRefs = before.filter((pr) => !(pr.kind === 'circle' && pr.id === circleId));
+            if (afterRefs.length !== before.length) {
+              const newKind = resolveConstructionKind(afterRefs);
+              return {
+                ...pt,
+                parent_refs: afterRefs,
+                defining_parents: afterRefs.map((p) => p.id),
+                construction_kind: newKind
+              };
+            }
+            return pt;
+          });
+          
           model.circles.splice(idx, 1);
           changed = true;
         }
       });
+      
+      // Remove collected circle points after all circles are processed
+      if (allCirclePointsToRemove.size > 0) {
+        removePointsAndRelated(Array.from(allCirclePointsToRemove), true);
+      }
       
       const anglesToRemove = Array.from(multiSelectedAngles);
       anglesToRemove.sort((a, b) => b - a);
@@ -6694,18 +6740,53 @@ function initRuntime() {
       if (circle) {
         if (circle.label) reclaimLabel(circle.label);
         const circleId = circle.id;
-        const toRemove = new Set<number>([circle.center]);
+        
+        // Collect points to remove - only those that were created for this circle
+        // and are not used elsewhere as defining points of other objects
+        const toRemove = new Set<number>();
+        
+        // Check center point - only remove if not used as defining point for lines
+        const centerUsedInLines = model.lines.some(line => line.defining_points.includes(circle.center));
+        if (!centerUsedInLines) {
+          toRemove.add(circle.center);
+        }
+        
+        // Check other points on circle
         const constrainedPoints = [circle.radius_point, ...circle.points];
         constrainedPoints.forEach((pid) => {
           if (circleHasDefiningPoint(circle, pid)) return;
           const point = model.points[pid];
           if (!point) return;
           const hasCircleParent = point.parent_refs.some((pr) => pr.kind === 'circle' && pr.id === circleId);
-          if (!isCircleThroughPoints(circle) || hasCircleParent) {
+          
+          // Only remove if not used as defining point for lines
+          const usedInLines = model.lines.some(line => line.defining_points.includes(pid));
+          if (!usedInLines && (!isCircleThroughPoints(circle) || hasCircleParent)) {
             toRemove.add(pid);
           }
         });
-        removePointsAndRelated(Array.from(toRemove), true);
+        
+        // Remove circle from parent_refs of points that are not being deleted
+        model.points = model.points.map((pt, idx) => {
+          if (toRemove.has(idx)) return pt;
+          const before = pt.parent_refs || [];
+          const afterRefs = before.filter((pr) => !(pr.kind === 'circle' && pr.id === circleId));
+          if (afterRefs.length !== before.length) {
+            const newKind = resolveConstructionKind(afterRefs);
+            return {
+              ...pt,
+              parent_refs: afterRefs,
+              defining_parents: afterRefs.map((p) => p.id),
+              construction_kind: newKind
+            };
+          }
+          return pt;
+        });
+        
+        if (toRemove.size > 0) {
+          removePointsAndRelated(Array.from(toRemove), true);
+        }
+        
         const idx = model.indexById.circle[circleId];
         if (idx !== undefined) {
           model.circles.splice(idx, 1);
