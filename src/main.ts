@@ -5073,7 +5073,6 @@ function importButtonConfiguration(jsonString: string) {
     saveButtonConfig();
     
     // Reload UI
-    renderButtonConfigUI();
     applyButtonConfiguration();
     
     return true;
@@ -5336,6 +5335,20 @@ function initRuntime() {
       const dy = y - dragStart.y;
       const movedPointIndices = new Set<number>();
       
+      // Collect all points from selected lines (including intersection points)
+      multiSelectedLines.forEach(li => {
+        const line = model.lines[li];
+        if (line) {
+          line.points.forEach(pi => movedPointIndices.add(pi));
+          // Also collect points that have this line as parent (e.g., intersection points)
+          model.points.forEach((p, idx) => {
+            if (p && p.parent_refs.some(ref => ref.kind === 'line' && ref.id === line.id)) {
+              movedPointIndices.add(idx);
+            }
+          });
+        }
+      });
+      
       // Move all selected circles (collect all their points)
       multiSelectedCircles.forEach(ci => {
         const circle = model.circles[ci];
@@ -5363,7 +5376,9 @@ function initRuntime() {
       // Move all collected points once
       movedPointIndices.forEach(idx => {
         const p = model.points[idx];
-        if (p && isPointDraggable(p)) {
+        // During multi-selection drag, move ALL points including intersections/midpoints
+        // to keep the construction together - they will be recomputed after the drag
+        if (p) {
           model.points[idx] = { ...p, x: p.x + dx, y: p.y + dy };
         }
       });
@@ -6367,7 +6382,11 @@ function initRuntime() {
     pointsToClone.forEach(idx => {
       const p = model.points[idx];
       if (p) {
-        const newPoint = { ...p, id: nextId('point', model) };
+        // Clone midpoint/symmetric metadata (will be updated later after lines are cloned)
+        let midpoint = p.midpoint ? { ...p.midpoint } : undefined;
+        let symmetric = p.symmetric ? { ...p.symmetric } : undefined;
+        
+        const newPoint = { ...p, id: nextId('point', model), midpoint, symmetric };
         model.points.push(newPoint);
         const newIdx = model.points.length - 1;
         pointRemap.set(idx, newIdx);
@@ -6381,10 +6400,54 @@ function initRuntime() {
       const line = model.lines[idx];
       if (line) {
         const newPoints = line.points.map(pi => pointRemap.get(pi) ?? pi);
+        const newDefiningPoints: [number, number] = [
+          pointRemap.get(line.defining_points[0]) ?? line.defining_points[0],
+          pointRemap.get(line.defining_points[1]) ?? line.defining_points[1]
+        ];
+        
+        // Clone parallel/perpendicular metadata with updated point/line references
+        let parallel = line.parallel ? { ...line.parallel } : undefined;
+        let perpendicular = line.perpendicular ? { ...line.perpendicular } : undefined;
+        
+        if (parallel) {
+          const throughPointIdx = pointIndexById(parallel.throughPoint);
+          const helperPointIdx = pointIndexById(parallel.helperPoint);
+          const refLineIdx = lineIndexById(parallel.referenceLine);
+          
+          if (throughPointIdx !== null && pointRemap.has(throughPointIdx)) {
+            parallel.throughPoint = model.points[pointRemap.get(throughPointIdx)!].id;
+          }
+          if (helperPointIdx !== null && pointRemap.has(helperPointIdx)) {
+            parallel.helperPoint = model.points[pointRemap.get(helperPointIdx)!].id;
+          }
+          if (refLineIdx !== null && lineRemap.has(refLineIdx)) {
+            parallel.referenceLine = model.lines[lineRemap.get(refLineIdx)!].id;
+          }
+        }
+        
+        if (perpendicular) {
+          const throughPointIdx = pointIndexById(perpendicular.throughPoint);
+          const helperPointIdx = pointIndexById(perpendicular.helperPoint);
+          const refLineIdx = lineIndexById(perpendicular.referenceLine);
+          
+          if (throughPointIdx !== null && pointRemap.has(throughPointIdx)) {
+            perpendicular.throughPoint = model.points[pointRemap.get(throughPointIdx)!].id;
+          }
+          if (helperPointIdx !== null && pointRemap.has(helperPointIdx)) {
+            perpendicular.helperPoint = model.points[pointRemap.get(helperPointIdx)!].id;
+          }
+          if (refLineIdx !== null && lineRemap.has(refLineIdx)) {
+            perpendicular.referenceLine = model.lines[lineRemap.get(refLineIdx)!].id;
+          }
+        }
+        
         const newLine = { 
           ...line, 
           id: nextId('line', model),
           points: newPoints,
+          defining_points: newDefiningPoints,
+          parallel,
+          perpendicular,
           segmentStyles: line.segmentStyles?.map(s => ({ ...s })),
           segmentKeys: line.segmentKeys ? [...line.segmentKeys] : undefined
         };
@@ -6415,14 +6478,69 @@ function initRuntime() {
         return ref;
       }) || [];
       
+      // Update midpoint metadata
+      let midpoint = newPoint.midpoint;
+      if (midpoint) {
+        const [parentA, parentB] = midpoint.parents;
+        const parentAIdx = pointIndexById(parentA);
+        const parentBIdx = pointIndexById(parentB);
+        
+        const newParentA = parentAIdx !== null && pointRemap.has(parentAIdx) 
+          ? model.points[pointRemap.get(parentAIdx)!].id 
+          : parentA;
+        const newParentB = parentBIdx !== null && pointRemap.has(parentBIdx) 
+          ? model.points[pointRemap.get(parentBIdx)!].id 
+          : parentB;
+        
+        let parentLineId = midpoint.parentLineId;
+        if (parentLineId) {
+          const lineIdx = lineIndexById(parentLineId);
+          if (lineIdx !== null && lineRemap.has(lineIdx)) {
+            parentLineId = model.lines[lineRemap.get(lineIdx)!].id;
+          }
+        }
+        
+        midpoint = {
+          parents: [newParentA, newParentB],
+          parentLineId
+        };
+      }
+      
+      // Update symmetric metadata
+      let symmetric = newPoint.symmetric;
+      if (symmetric) {
+        const sourceIdx = pointIndexById(symmetric.source);
+        const newSource = sourceIdx !== null && pointRemap.has(sourceIdx)
+          ? model.points[pointRemap.get(sourceIdx)!].id
+          : symmetric.source;
+        
+        let mirror = symmetric.mirror;
+        if (mirror.kind === 'point') {
+          const mirrorIdx = pointIndexById(mirror.id);
+          if (mirrorIdx !== null && pointRemap.has(mirrorIdx)) {
+            mirror = { kind: 'point', id: model.points[pointRemap.get(mirrorIdx)!].id };
+          }
+        } else if (mirror.kind === 'line') {
+          const mirrorIdx = lineIndexById(mirror.id);
+          if (mirrorIdx !== null && lineRemap.has(mirrorIdx)) {
+            mirror = { kind: 'line', id: model.lines[lineRemap.get(mirrorIdx)!].id };
+          }
+        }
+        
+        symmetric = { source: newSource, mirror };
+      }
+      
       model.points[newIdx] = {
         ...newPoint,
         parent_refs: updatedParentRefs,
-        defining_parents: updatedParentRefs.map(p => p.id)
+        defining_parents: updatedParentRefs.map(p => p.id),
+        midpoint,
+        symmetric
       };
     });
     
     // Clone circles
+    const circleRemap = new Map<number, number>();
     multiSelectedCircles.forEach(idx => {
       const circle = model.circles[idx];
       if (circle) {
@@ -6439,11 +6557,14 @@ function initRuntime() {
           newCircle.radius_point = circle.radius_point !== undefined ? (pointRemap.get(circle.radius_point) ?? circle.radius_point) : circle.radius_point;
         }
         model.circles.push(newCircle);
-        registerIndex(model, 'circle', newCircle.id, model.circles.length - 1);
+        const newIdx = model.circles.length - 1;
+        circleRemap.set(idx, newIdx);
+        registerIndex(model, 'circle', newCircle.id, newIdx);
       }
     });
     
     // Clone angles
+    const angleRemap = new Map<number, number>();
     multiSelectedAngles.forEach(idx => {
       const ang = model.angles[idx];
       if (ang) {
@@ -6455,11 +6576,14 @@ function initRuntime() {
           vertex: pointRemap.get(ang.vertex) ?? ang.vertex
         };
         model.angles.push(newAngle);
-        registerIndex(model, 'angle', newAngle.id, model.angles.length - 1);
+        const newIdx = model.angles.length - 1;
+        angleRemap.set(idx, newIdx);
+        registerIndex(model, 'angle', newAngle.id, newIdx);
       }
     });
     
     // Clone polygons
+    const polygonRemap = new Map<number, number>();
     multiSelectedPolygons.forEach(idx => {
       const poly = model.polygons[idx];
       if (poly) {
@@ -6470,7 +6594,9 @@ function initRuntime() {
           lines: newLines
         };
         model.polygons.push(newPoly);
-        registerIndex(model, 'polygon', newPoly.id, model.polygons.length - 1);
+        const newIdx = model.polygons.length - 1;
+        polygonRemap.set(idx, newIdx);
+        registerIndex(model, 'polygon', newPoly.id, newIdx);
       }
     });
     
@@ -6495,6 +6621,24 @@ function initRuntime() {
     const newLineSelection = new Set<number>();
     lineRemap.forEach((newIdx, _) => newLineSelection.add(newIdx));
     
+    // Offset cloned free points slightly so they don't overlap with originals
+    const CLONE_OFFSET = 20;
+    newPointSelection.forEach(idx => {
+      const pt = model.points[idx];
+      if (pt && pt.construction_kind === 'free') {
+        model.points[idx] = { ...pt, x: pt.x + CLONE_OFFSET, y: pt.y + CLONE_OFFSET };
+      }
+    });
+    
+    // Recompute dependent points (intersections, midpoints, etc.) after moving free points
+    newLineSelection.forEach(lineIdx => {
+      updateIntersectionsForLine(lineIdx);
+    });
+    newPointSelection.forEach(idx => {
+      updateMidpointsForPoint(idx);
+    });
+    
+    // Clear old selection
     multiSelectedPoints.clear();
     multiSelectedLines.clear();
     multiSelectedCircles.clear();
@@ -6502,8 +6646,22 @@ function initRuntime() {
     multiSelectedPolygons.clear();
     multiSelectedInkStrokes.clear();
     
+    // Clear single selection as well
+    selectedPointIndex = null;
+    selectedLineIndex = null;
+    selectedCircleIndex = null;
+    selectedAngleIndex = null;
+    selectedPolygonIndex = null;
+    selectedInkStrokeIndex = null;
+    selectedSegments.clear();
+    selectedArcSegments.clear();
+    
+    // Select cloned objects
     newPointSelection.forEach(idx => multiSelectedPoints.add(idx));
     newLineSelection.forEach(idx => multiSelectedLines.add(idx));
+    circleRemap.forEach((newIdx, _) => multiSelectedCircles.add(newIdx));
+    angleRemap.forEach((newIdx, _) => multiSelectedAngles.add(newIdx));
+    polygonRemap.forEach((newIdx, _) => multiSelectedPolygons.add(newIdx));
     
     // Activate move mode
     multiMoveActive = true;
@@ -11485,8 +11643,8 @@ function renderDebugPanel() {
   const ptRows = model.points.map((p) => fmtPoint(p));
   if (ptRows.length) {
     sections.push(
-      `<div style="margin-bottom:8px;"><div>Punkty (${ptRows.length})</div><div>${ptRows
-        .map((r) => `<div style="margin-bottom:2px;">${r}</div>`)
+      `<div style="margin-bottom:12px;"><div style="font-weight:600;margin-bottom:4px;">Punkty (${ptRows.length})</div><div>${ptRows
+        .map((r) => `<div style="margin-bottom:3px;line-height:1.4;">${r}</div>`)
         .join('')}</div></div>`
     );
   }
@@ -11518,11 +11676,11 @@ function renderDebugPanel() {
     const relationTail = relationSymbol && referenceId
       ? ` ${relationSymbol} ${friendlyLabelForId(referenceId)}`
       : '';
-    return `<div style="margin-bottom:4px;">${friendlyLabelForId(l.id)} ${defPart}${relationTail}${incidentTail}${childTail}</div>`;
+    return `<div style="margin-bottom:3px;line-height:1.4;">${friendlyLabelForId(l.id)} ${defPart}${relationTail}${incidentTail}${childTail}</div>`;
   });
   if (lineRows.length) {
     sections.push(
-      `<div style="margin-bottom:8px;"><div>Linie (${lineRows.length})</div>${lineRows.join('')}</div>`
+      `<div style="margin-bottom:12px;"><div style="font-weight:600;margin-bottom:4px;">Linie (${lineRows.length})</div>${lineRows.join('')}</div>`
     );
   }
 
@@ -11548,11 +11706,11 @@ function renderDebugPanel() {
         return `[${centerLabel}, ${radiusLabel}] <span style="color:#9ca3af;">r=${radiusValue}</span>`;
       })();
 
-    return `<div style="margin-bottom:4px;">${friendlyLabelForId(c.id)} ${main}${meta}</div>`;
+    return `<div style="margin-bottom:3px;line-height:1.4;">${friendlyLabelForId(c.id)} ${main}${meta}</div>`;
   });
   if (circleRows.length) {
     sections.push(
-      `<div style="margin-bottom:8px;"><div>Okręgi (${circleRows.length})</div>${circleRows.join('')}</div>`
+      `<div style="margin-bottom:12px;"><div style="font-weight:600;margin-bottom:4px;">Okręgi (${circleRows.length})</div>${circleRows.join('')}</div>`
     );
   }
 
@@ -11566,19 +11724,13 @@ function renderDebugPanel() {
             .filter(Boolean)
             .join(' • ')}</span>`
         : '';
-    return `<div style="margin-bottom:4px;">${friendlyLabelForId(p.id)} [${lines}${meta}]</div>`;
+    return `<div style="margin-bottom:3px;line-height:1.4;">${friendlyLabelForId(p.id)} [${lines}${meta}]</div>`;
   });
   if (polyRows.length) {
     sections.push(
-      `<div style="margin-bottom:8px;"><div>Wielokąty (${polyRows.length})</div>${polyRows.join('')}</div>`
+      `<div style="margin-bottom:12px;"><div style="font-weight:600;margin-bottom:4px;">Wielokąty (${polyRows.length})</div>${polyRows.join('')}</div>`
     );
   }
-
-  debugContent.innerHTML = sections.length
-    ? sections.join('')
-    : '<div style="color:#9ca3af;">Brak obiektów do wyświetlenia.</div>';
-
-  requestAnimationFrame(() => ensureDebugPanelPosition());
 
   const angleRows = model.angles.map((a) => {
     const vertexLabel = friendlyLabelForId(model.points[a.vertex]?.id ?? `p${a.vertex}`);
@@ -11590,14 +11742,19 @@ function renderDebugPanel() {
             .filter(Boolean)
             .join(' • ')}</span>`
         : '';
-    return `<div style="margin-bottom:4px;">${friendlyLabelForId(a.id)} vertex: ${vertexLabel}${meta}</div>`;
+    return `<div style="margin-bottom:3px;line-height:1.4;">${friendlyLabelForId(a.id)} vertex: ${vertexLabel}${meta}</div>`;
   });
   if (angleRows.length) {
     sections.push(
-      `<div style="margin-bottom:8px;"><div>Kąty (${angleRows.length})</div>${angleRows.join('')}</div>`
+      `<div style="margin-bottom:12px;"><div style="font-weight:600;margin-bottom:4px;">Kąty (${angleRows.length})</div>${angleRows.join('')}</div>`
     );
   }
 
+  debugContent.innerHTML = sections.length
+    ? sections.join('')
+    : '<div style="color:#9ca3af;">Brak obiektów do wyświetlenia.</div>';
+
+  requestAnimationFrame(() => ensureDebugPanelPosition());
 }
 
 function drawDebugLabels() {
