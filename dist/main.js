@@ -10864,15 +10864,17 @@ function renderDebugPanel() {
     const fmtPoint = (p) => {
         const coords = ` <span style="color:#9ca3af;">(${p.x.toFixed(1)}, ${p.y.toFixed(1)})</span>`;
         const parentLabels = (p.parent_refs ?? []).map((pr) => friendlyLabelForId(pr.id));
-        const parentsInfo = parentLabels.length
-            ? ` <span style="color:#9ca3af;">${parentLabels.join(', ')}</span>`
-            : '';
-        const kindInfo = (() => {
-            if (!p.construction_kind || p.construction_kind === 'free')
+        const parentsInfo = (() => {
+            if (!parentLabels.length)
                 return '';
-            if (p.construction_kind === 'intersection') {
-                return ' <span style="color:#9ca3af;">∩</span>';
+            if (p.construction_kind === 'intersection' && parentLabels.length === 2) {
+                return ` <span style="color:#9ca3af;">${parentLabels[0]} ∩ ${parentLabels[1]}</span>`;
             }
+            return ` <span style="color:#9ca3af;">${parentLabels.join(', ')}</span>`;
+        })();
+        const kindInfo = (() => {
+            if (!p.construction_kind || p.construction_kind === 'free' || p.construction_kind === 'intersection')
+                return '';
             return ` <span style="color:#9ca3af;">${p.construction_kind}</span>`;
         })();
         const hiddenInfo = p.style.hidden ? ' <span style="color:#ef4444;">hidden</span>' : '';
