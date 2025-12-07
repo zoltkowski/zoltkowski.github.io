@@ -1540,29 +1540,34 @@ function setMode(next) {
     }
     // Update active states in second row if visible
     updateSecondRowActiveStates();
-    // Clear multiselection when leaving multiselect mode
+    // Clear all selections when changing mode (except multiselect itself)
     if (mode !== 'multiselect') {
         clearMultiSelection();
     }
-    if (mode === 'segment' && selectedPointIndex !== null) {
-        segmentStartIndex = selectedPointIndex;
-        segmentStartTemporary = false;
-    }
-    else if (mode !== 'segment') {
-        segmentStartIndex = null;
-        segmentStartTemporary = false;
-    }
-    if (mode === 'circle') {
-        // Clear all selections when entering circle mode
+    // For segment mode, capture selected point BEFORE clearing if coming from move mode
+    // REMOVED: We don't want to use selected point as segment start
+    // Clear single selections early (but not for 'move' mode)
+    if (mode !== 'move') {
         selectedPointIndex = null;
         selectedLineIndex = null;
         selectedCircleIndex = null;
         selectedPolygonIndex = null;
         selectedAngleIndex = null;
-        selectedLabel = null;
-        selectedArcSegments.clear();
-        selectedSegments.clear();
         selectedInkStrokeIndex = null;
+        selectedLabel = null;
+        selectedSegments.clear();
+        selectedArcSegments.clear();
+    }
+    if (mode !== 'segment') {
+        segmentStartIndex = null;
+        segmentStartTemporary = false;
+    }
+    else {
+        // Switching TO segment mode - always clear start point
+        segmentStartIndex = null;
+        segmentStartTemporary = false;
+    }
+    if (mode === 'circle') {
         circleCenterIndex = null;
         pendingCircleRadiusPoint = null;
         updateSelectionButtons();
@@ -1591,6 +1596,7 @@ function setMode(next) {
         activeInkStroke = null;
     }
     updateToolButtons();
+    draw();
 }
 function handleCanvasClick(ev) {
     if (!canvas)
