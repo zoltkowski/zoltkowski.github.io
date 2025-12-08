@@ -12,6 +12,7 @@ const RIGHT_ANGLE_MARK_RATIO = 0.65;
 const RIGHT_ANGLE_MARK_MAX = 72;
 const RIGHT_ANGLE_MARK_MARGIN = 4;
 const LABEL_FONT_DEFAULT = 12;
+const getLabelFontDefault = () => THEME.fontSize || LABEL_FONT_DEFAULT;
 const LABEL_FONT_MIN = 8;
 const LABEL_FONT_MAX = 48;
 const LABEL_FONT_STEP = 2;
@@ -233,7 +234,9 @@ const THEME_PRESETS = {
         angleStrokeWidth: 2,
         angleDefaultRadius: 28,
         midpointColor: '#9ca3af',
-        bg: '#111827'
+        bg: '#111827',
+        fontSize: 12,
+        highlightWidth: 1.5
     },
     light: {
         palette: DEFAULT_COLORS_LIGHT,
@@ -245,7 +248,9 @@ const THEME_PRESETS = {
         angleStrokeWidth: 2,
         angleDefaultRadius: 28,
         midpointColor: '#737373',
-        bg: '#ffffff'
+        bg: '#ffffff',
+        fontSize: 12,
+        highlightWidth: 1.5
     }
 };
 const THEME = { ...THEME_PRESETS.dark };
@@ -1697,7 +1702,7 @@ function setMode(next) {
                     text,
                     color,
                     offset: defaultAngleLabelOffset(selectedAngleIndex),
-                    fontSize: LABEL_FONT_DEFAULT,
+                    fontSize: getLabelFontDefault(),
                     seq
                 };
                 changed = true;
@@ -1724,7 +1729,7 @@ function setMode(next) {
                                 text,
                                 color,
                                 offset: defaultLineLabelOffset(li),
-                                fontSize: LABEL_FONT_DEFAULT,
+                                fontSize: getLabelFontDefault(),
                                 seq
                             };
                             changed = true;
@@ -1765,7 +1770,7 @@ function setMode(next) {
                                     text,
                                     color,
                                     offset: defaultPointLabelOffset(vi),
-                                    fontSize: LABEL_FONT_DEFAULT,
+                                    fontSize: getLabelFontDefault(),
                                     seq: undefined // Custom label, no sequence
                                 };
                             }
@@ -1781,7 +1786,7 @@ function setMode(next) {
                                 text,
                                 color,
                                 offset: defaultPointLabelOffset(vi),
-                                fontSize: LABEL_FONT_DEFAULT,
+                                fontSize: getLabelFontDefault(),
                                 seq: { kind: 'upper', idx }
                             };
                         });
@@ -1798,7 +1803,7 @@ function setMode(next) {
                         text,
                         color,
                         offset: defaultLineLabelOffset(selectedLineIndex),
-                        fontSize: LABEL_FONT_DEFAULT,
+                        fontSize: getLabelFontDefault(),
                         seq
                     };
                     changed = true;
@@ -1814,7 +1819,7 @@ function setMode(next) {
                                     text,
                                     color,
                                     offset: defaultPointLabelOffset(pIdx),
-                                    fontSize: LABEL_FONT_DEFAULT,
+                                    fontSize: getLabelFontDefault(),
                                     seq
                                 };
                                 changed = true;
@@ -1832,7 +1837,7 @@ function setMode(next) {
                     text,
                     color,
                     offset: defaultPointLabelOffset(selectedPointIndex),
-                    fontSize: LABEL_FONT_DEFAULT,
+                    fontSize: getLabelFontDefault(),
                     seq
                 };
                 changed = true;
@@ -2669,7 +2674,7 @@ function handleCanvasClick(ev) {
                     text,
                     color,
                     offset: defaultAngleLabelOffset(angleHit),
-                    fontSize: LABEL_FONT_DEFAULT,
+                    fontSize: getLabelFontDefault(),
                     seq
                 };
                 selectedAngleIndex = angleHit;
@@ -2690,7 +2695,7 @@ function handleCanvasClick(ev) {
                     text,
                     color,
                     offset: defaultPointLabelOffset(pointHit),
-                    fontSize: LABEL_FONT_DEFAULT,
+                    fontSize: getLabelFontDefault(),
                     seq
                 };
                 changed = true;
@@ -2733,7 +2738,7 @@ function handleCanvasClick(ev) {
                                 text,
                                 color,
                                 offset: defaultPointLabelOffset(vi),
-                                fontSize: LABEL_FONT_DEFAULT,
+                                fontSize: getLabelFontDefault(),
                                 seq: undefined // Custom label, no sequence
                             };
                         }
@@ -2749,7 +2754,7 @@ function handleCanvasClick(ev) {
                             text,
                             color,
                             offset: defaultPointLabelOffset(vi),
-                            fontSize: LABEL_FONT_DEFAULT,
+                            fontSize: getLabelFontDefault(),
                             seq: { kind: 'upper', idx }
                         };
                     });
@@ -2771,7 +2776,7 @@ function handleCanvasClick(ev) {
                     text,
                     color,
                     offset: defaultLineLabelOffset(lineHit.line),
-                    fontSize: LABEL_FONT_DEFAULT,
+                    fontSize: getLabelFontDefault(),
                     seq
                 };
                 changed = true;
@@ -2809,7 +2814,7 @@ function handleCanvasClick(ev) {
                             labelGreekIdx = greekIdx + 1;
                     }
                 }
-                model.labels.push({ text: clean, pos: { x, y }, color, fontSize: LABEL_FONT_DEFAULT, seq });
+                model.labels.push({ text: clean, pos: { x, y }, color, fontSize: getLabelFontDefault(), seq });
                 changed = true;
             }
         }
@@ -4740,7 +4745,6 @@ function initAppearanceTab() {
     // Ustawienia motywu
     const themeBgColor = document.getElementById('themeBgColor');
     const themeStrokeColor = document.getElementById('themeStrokeColor');
-    const themeFillColor = document.getElementById('themeFillColor');
     const themeHighlightColor = document.getElementById('themeHighlightColor');
     const themeLineWidthValue = document.getElementById('themeLineWidthValue');
     const themePointSizeValue = document.getElementById('themePointSizeValue');
@@ -4758,8 +4762,6 @@ function initAppearanceTab() {
             themeBgColor.value = current.bg || base.bg;
         if (themeStrokeColor)
             themeStrokeColor.value = current.defaultStroke || base.defaultStroke;
-        if (themeFillColor)
-            themeFillColor.value = current.defaultStroke || base.defaultStroke;
         if (themeHighlightColor)
             themeHighlightColor.value = current.highlight || base.highlight;
         if (themeLineWidthValue)
@@ -4769,9 +4771,9 @@ function initAppearanceTab() {
         if (themeArcRadiusValue)
             themeArcRadiusValue.textContent = `${current.angleDefaultRadius || base.angleDefaultRadius} px`;
         if (themeFontSizeValue)
-            themeFontSizeValue.textContent = `${LABEL_FONT_DEFAULT} px`;
+            themeFontSizeValue.textContent = `${current.fontSize || base.fontSize} px`;
         if (themeHighlightWidthValue)
-            themeHighlightWidthValue.textContent = `${HIGHLIGHT_LINE.width} px`;
+            themeHighlightWidthValue.textContent = `${current.highlightWidth || base.highlightWidth} px`;
         // Aktualizuj przyciski motywu
         themeBtns.forEach(btn => {
             btn.classList.toggle('active', btn.dataset.theme === theme);
@@ -4825,6 +4827,7 @@ function initAppearanceTab() {
             if (target === 'lineWidth') {
                 const newValue = Math.max(1, Math.min(10, (current.lineWidth || base.lineWidth) + delta));
                 saveThemeValue('lineWidth', newValue);
+                saveThemeValue('angleStrokeWidth', newValue);
                 if (themeLineWidthValue)
                     themeLineWidthValue.textContent = `${newValue} px`;
             }
@@ -4839,6 +4842,18 @@ function initAppearanceTab() {
                 saveThemeValue('angleDefaultRadius', newValue);
                 if (themeArcRadiusValue)
                     themeArcRadiusValue.textContent = `${newValue} px`;
+            }
+            else if (target === 'fontSize') {
+                const newValue = Math.max(8, Math.min(24, (current.fontSize || base.fontSize) + delta));
+                saveThemeValue('fontSize', newValue);
+                if (themeFontSizeValue)
+                    themeFontSizeValue.textContent = `${newValue} px`;
+            }
+            else if (target === 'highlightWidth') {
+                const newValue = Math.max(1, Math.min(5, (current.highlightWidth || base.highlightWidth) + delta * 0.5));
+                saveThemeValue('highlightWidth', newValue);
+                if (themeHighlightWidthValue)
+                    themeHighlightWidthValue.textContent = `${newValue.toFixed(1)} px`;
             }
         });
     });
@@ -4883,7 +4898,7 @@ function initAppearanceTab() {
         ctx.stroke();
         // Podświetlony bok
         ctx.strokeStyle = theme.highlight;
-        ctx.lineWidth = theme.lineWidth + 1.5;
+        ctx.lineWidth = (theme.highlightWidth || 1.5) + theme.lineWidth;
         ctx.beginPath();
         ctx.moveTo(points[1].x, points[1].y);
         ctx.lineTo(points[2].x, points[2].y);
@@ -4895,16 +4910,35 @@ function initAppearanceTab() {
             ctx.arc(p.x, p.y, theme.pointSize + 2, 0, Math.PI * 2);
             ctx.fill();
         });
-        // Kąt
-        const angleCenter = points[1];
+        // Kąt przy wierzchołku C (górny)
+        const angleCenter = points[2];
+        const angle1 = Math.atan2(points[0].y - angleCenter.y, points[0].x - angleCenter.x);
+        const angle2 = Math.atan2(points[1].y - angleCenter.y, points[1].x - angleCenter.x);
         ctx.strokeStyle = theme.defaultStroke;
-        ctx.lineWidth = theme.angleStrokeWidth;
+        ctx.lineWidth = theme.lineWidth;
         ctx.beginPath();
-        ctx.arc(angleCenter.x, angleCenter.y, theme.angleDefaultRadius, Math.PI * 0.7, Math.PI * 1.0);
+        ctx.arc(angleCenter.x, angleCenter.y, theme.angleDefaultRadius, angle2, angle1);
         ctx.stroke();
+        // Okrąg na zewnątrz trójkąta
+        const circleCenter = { x: w * 0.75, y: h * 0.35 };
+        const circleRadius = w * 0.12;
+        ctx.strokeStyle = theme.defaultStroke;
+        ctx.lineWidth = theme.lineWidth;
+        ctx.beginPath();
+        ctx.arc(circleCenter.x, circleCenter.y, circleRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        // Punkty na okręgu
+        const circlePoint1 = { x: circleCenter.x + circleRadius * Math.cos(Math.PI * 0.25), y: circleCenter.y + circleRadius * Math.sin(Math.PI * 0.25) };
+        const circlePoint2 = { x: circleCenter.x + circleRadius * Math.cos(Math.PI * 1.75), y: circleCenter.y + circleRadius * Math.sin(Math.PI * 1.75) };
+        [circlePoint1, circlePoint2].forEach(p => {
+            ctx.fillStyle = theme.defaultStroke;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, theme.pointSize + 2, 0, Math.PI * 2);
+            ctx.fill();
+        });
         // Etykiety
         ctx.fillStyle = theme.defaultStroke;
-        ctx.font = `${LABEL_FONT_DEFAULT}px Arial`;
+        ctx.font = `${theme.fontSize || 12}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('A', points[0].x, points[0].y + 20);
@@ -7225,7 +7259,7 @@ function tryApplyLabelToSelection() {
             text,
             color,
             offset: defaultAngleLabelOffset(selectedAngleIndex),
-            fontSize: LABEL_FONT_DEFAULT,
+            fontSize: getLabelFontDefault(),
             seq
         };
         changed = true;
@@ -7238,7 +7272,7 @@ function tryApplyLabelToSelection() {
                 text,
                 color,
                 offset: defaultPointLabelOffset(vi),
-                fontSize: LABEL_FONT_DEFAULT,
+                fontSize: getLabelFontDefault(),
                 seq
             };
         });
@@ -7258,7 +7292,7 @@ function tryApplyLabelToSelection() {
                         text,
                         color,
                         offset: defaultPointLabelOffset(vi),
-                        fontSize: LABEL_FONT_DEFAULT,
+                        fontSize: getLabelFontDefault(),
                         seq
                     };
                 });
@@ -7274,7 +7308,7 @@ function tryApplyLabelToSelection() {
                 text,
                 color,
                 offset: defaultLineLabelOffset(selectedLineIndex),
-                fontSize: LABEL_FONT_DEFAULT,
+                fontSize: getLabelFontDefault(),
                 seq
             };
             changed = true;
@@ -7286,7 +7320,7 @@ function tryApplyLabelToSelection() {
             text,
             color,
             offset: defaultPointLabelOffset(selectedPointIndex),
-            fontSize: LABEL_FONT_DEFAULT,
+            fontSize: getLabelFontDefault(),
             seq
         };
         changed = true;
@@ -9366,6 +9400,7 @@ function setTheme(theme) {
         }
     }
     HIGHLIGHT_LINE.color = THEME.highlight;
+    HIGHLIGHT_LINE.width = THEME.highlightWidth;
     if (strokeColorInput)
         strokeColorInput.value = palette[0] ?? THEME.defaultStroke;
     if (styleWidthInput)
