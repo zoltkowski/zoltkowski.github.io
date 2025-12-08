@@ -806,6 +806,10 @@ let styleMenuBtn: HTMLButtonElement | null = null;
 let styleMenuContainer: HTMLElement | null = null;
 let styleMenuDropdown: HTMLElement | null = null;
 let styleMenuOpen = false;
+
+let eraserBtn: HTMLButtonElement | null = null;
+let eraserActive = false;
+
 let styleMenuSuppressed = false;
 let styleColorRow: HTMLElement | null = null;
 let styleWidthRow: HTMLElement | null = null;
@@ -2196,6 +2200,13 @@ function setMode(next: Mode) {
   if (activeInkStroke && mode !== 'handwriting') {
     activeInkStroke = null;
   }
+  if (eraserActive && mode !== 'handwriting') {
+    eraserActive = false;
+    if (eraserBtn) {
+      eraserBtn.classList.remove('active');
+      eraserBtn.setAttribute('aria-pressed', 'false');
+    }
+  }
   
   // Handle LABEL mode - add labels to selected objects and switch back to move
   if (mode === 'label') {
@@ -2390,6 +2401,16 @@ function handleCanvasClick(ev: PointerEvent) {
     }
   }
   if (mode === 'handwriting') {
+    if (eraserActive) {
+      const { x, y } = toPoint(ev);
+      const hit = findInkStrokeAt({ x, y });
+      if (hit !== null) {
+        model.inkStrokes.splice(hit, 1);
+        pushHistory();
+        draw();
+      }
+      return;
+    }
     beginInkStroke(ev);
     return;
   }
@@ -5800,6 +5821,18 @@ function initRuntime() {
   styleMenuContainer = document.getElementById('styleMenuContainer') as HTMLElement | null;
   styleMenuBtn = document.getElementById('styleMenu') as HTMLButtonElement | null;
   styleMenuDropdown = styleMenuContainer?.querySelector('.dropdown-menu') as HTMLElement | null;
+  eraserBtn = document.getElementById('eraserBtn') as HTMLButtonElement | null;
+  if (eraserBtn) {
+    eraserBtn.addEventListener('click', () => {
+      eraserActive = !eraserActive;
+      eraserBtn?.classList.toggle('active', eraserActive);
+      eraserBtn?.setAttribute('aria-pressed', eraserActive ? 'true' : 'false');
+      // Ensure style menu is available when eraser toggled on (handwriting uses style menu)
+      if (eraserActive) {
+        if (styleMenuContainer) styleMenuContainer.style.display = 'inline-flex';
+      }
+    });
+  }
   styleColorRow = document.getElementById('styleColorRow');
   styleWidthRow = document.getElementById('styleWidthRow');
   styleTypeRow = document.getElementById('styleTypeRow');
@@ -9100,6 +9133,12 @@ function updateSelectionButtons() {
       styleMenuSuppressed = false;
     }
     updateStyleMenuValues();
+  }
+  if (eraserBtn) {
+    const showEraser = mode === 'handwriting';
+    eraserBtn.style.display = showEraser ? 'inline-flex' : 'none';
+    eraserBtn.classList.toggle('active', eraserActive);
+    eraserBtn.setAttribute('aria-pressed', eraserActive ? 'true' : 'false');
   }
 }
 
