@@ -115,10 +115,24 @@ const resolveConstructionKind = (parents, explicit) => {
 };
 const isMidpointPoint = (point) => !!point && point.construction_kind === 'midpoint' && !!point.midpoint;
 const isSymmetricPoint = (point) => !!point && point.construction_kind === 'symmetric' && !!point.symmetric;
-const isPointDraggable = (point) => !!point &&
-    point.construction_kind !== 'intersection' &&
-    point.construction_kind !== 'midpoint' &&
-    point.construction_kind !== 'symmetric';
+const isPointDraggable = (point) => {
+    if (!point)
+        return false;
+    if (point.construction_kind === 'intersection')
+        return false;
+    if (point.construction_kind === 'midpoint')
+        return false;
+    if (point.construction_kind === 'symmetric')
+        return false;
+    // Check if point is center of a three-point circle (computed center, not draggable)
+    const pointIdx = model.points.indexOf(point);
+    if (pointIdx >= 0) {
+        const isThreePointCenter = model.circles.some(c => isCircleThroughPoints(c) && c.center === pointIdx);
+        if (isThreePointCenter)
+            return false;
+    }
+    return true;
+};
 const isDefiningPointOfLine = (pointIdx, lineIdx) => {
     const line = model.lines[lineIdx];
     return !!line && line.defining_points.includes(pointIdx);
@@ -4871,6 +4885,11 @@ function initRuntime() {
                 circleDragContext.circleIdx === selectedCircleIndex &&
                 selectedPointIndex === null &&
                 selectedSegments.size === 0) {
+                // Don't allow dragging three-point circles (their center is computed)
+                const circle = model.circles[selectedCircleIndex];
+                if (circle && isCircleThroughPoints(circle)) {
+                    return;
+                }
                 circleDragContext.originals.forEach((orig, idx) => {
                     const pt = model.points[idx];
                     if (!pt)
