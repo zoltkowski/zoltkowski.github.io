@@ -8135,8 +8135,132 @@ function drawLabelText(label, anchor, selected = false, screenOffset) {
         ctx.stroke();
     }
     ctx.fillStyle = label.color ?? '#000';
-    ctx.fillText(label.text, 0, 0);
+    renderFormattedText(ctx, label.text, 0, 0);
     ctx.restore();
+}
+/**
+ * Parse label text and automatically add braces for subscripts/superscripts
+ * Examples:
+ * - P_11 -> P_{11}
+ * - a_BCd_EF -> a_{BC}d_{EF}
+ * - P_abc -> P_{abc}
+ */
+function autoAddBraces(text) {
+    let result = '';
+    let i = 0;
+    while (i < text.length) {
+        const char = text[i];
+        // Check for _ or ^
+        if ((char === '_' || char === '^') && i + 1 < text.length) {
+            result += char;
+            i++;
+            // If already has braces, keep them
+            if (text[i] === '{') {
+                result += char;
+                i++;
+                continue;
+            }
+            // Auto-group: collect consecutive chars of same type
+            const startIdx = i;
+            const firstChar = text[i];
+            // Determine grouping type based on first character
+            const isDigit = /\d/.test(firstChar);
+            const isLowercase = /[a-z]/.test(firstChar);
+            const isUppercase = /[A-Z]/.test(firstChar);
+            const isGreek = /[α-ωΑ-Ω]/.test(firstChar);
+            // Collect characters of the same type
+            while (i < text.length) {
+                const c = text[i];
+                const matches = isDigit ? /\d/.test(c) :
+                    isLowercase ? /[a-z]/.test(c) :
+                        isUppercase ? /[A-Z]/.test(c) :
+                            isGreek ? /[α-ωΑ-Ω]/.test(c) : false;
+                if (!matches)
+                    break;
+                i++;
+            }
+            const group = text.substring(startIdx, i);
+            if (group.length > 0) {
+                result += '{' + group + '}';
+            }
+        }
+        else {
+            result += char;
+            i++;
+        }
+    }
+    return result;
+}
+/**
+ * Render text with subscript/superscript support
+ * Supports: P_{11}, P^{2}, mixed P_{1}^{2}
+ */
+function renderFormattedText(ctx, text, x, y) {
+    // First, auto-add braces where needed
+    const processedText = autoAddBraces(text);
+    const baseFontSize = parseFloat(ctx.font) || 16;
+    const subSupSize = baseFontSize * 0.7;
+    const subOffset = baseFontSize * 0.3;
+    const supOffset = -baseFontSize * 0.4;
+    let currentX = x;
+    let i = 0;
+    while (i < processedText.length) {
+        const char = processedText[i];
+        // Handle subscript
+        if (char === '_' && i + 1 < processedText.length && processedText[i + 1] === '{') {
+            i += 2; // Skip _{
+            let content = '';
+            let braceCount = 1;
+            while (i < processedText.length && braceCount > 0) {
+                if (processedText[i] === '{')
+                    braceCount++;
+                else if (processedText[i] === '}') {
+                    braceCount--;
+                    if (braceCount === 0)
+                        break;
+                }
+                content += processedText[i];
+                i++;
+            }
+            // Render subscript
+            ctx.save();
+            ctx.font = `${subSupSize}px ${ctx.font.split('px ')[1] || 'sans-serif'}`;
+            ctx.fillText(content, currentX, y + subOffset);
+            currentX += ctx.measureText(content).width;
+            ctx.restore();
+            i++; // Skip closing }
+        }
+        // Handle superscript
+        else if (char === '^' && i + 1 < processedText.length && processedText[i + 1] === '{') {
+            i += 2; // Skip ^{
+            let content = '';
+            let braceCount = 1;
+            while (i < processedText.length && braceCount > 0) {
+                if (processedText[i] === '{')
+                    braceCount++;
+                else if (processedText[i] === '}') {
+                    braceCount--;
+                    if (braceCount === 0)
+                        break;
+                }
+                content += processedText[i];
+                i++;
+            }
+            // Render superscript
+            ctx.save();
+            ctx.font = `${subSupSize}px ${ctx.font.split('px ')[1] || 'sans-serif'}`;
+            ctx.fillText(content, currentX, y + supOffset);
+            currentX += ctx.measureText(content).width;
+            ctx.restore();
+            i++; // Skip closing }
+        }
+        // Regular character
+        else {
+            ctx.fillText(char, currentX, y);
+            currentX += ctx.measureText(char).width;
+            i++;
+        }
+    }
 }
 function updateOptionButtons() {
     if (showHiddenBtn) {
