@@ -2048,8 +2048,8 @@ function setMode(next: Mode) {
   // For segment mode, capture selected point BEFORE clearing if coming from move mode
   // REMOVED: We don't want to use selected point as segment start
   
-  // Clear single selections early (but not for 'move' mode)
-  if (mode !== 'move') {
+  // Clear single selections early (but not for 'move' or 'label' mode)
+  if (mode !== 'move' && mode !== 'label') {
     selectedPointIndex = null;
     selectedLineIndex = null;
     selectedCircleIndex = null;
@@ -2096,6 +2096,110 @@ function setMode(next: Mode) {
   }
   if (activeInkStroke && mode !== 'handwriting') {
     activeInkStroke = null;
+  }
+  
+  // Handle LABEL mode - add labels to selected objects and switch back to move
+  if (mode === 'label') {
+    const color = styleColorInput?.value || '#000';
+    let changed = false;
+    
+    const polygonHasLabels = (polyIdx: number | null) => {
+      if (polyIdx === null) return false;
+      const verts = polygonVerticesOrdered(polyIdx);
+      return verts.length > 0 && verts.every((vi) => !!model.points[vi]?.label);
+    };
+    
+    // Add label to selected angle
+    if (selectedAngleIndex !== null) {
+      if (!model.angles[selectedAngleIndex].label) {
+        const { text, seq } = nextGreek();
+        model.angles[selectedAngleIndex].label = {
+          text,
+          color,
+          offset: defaultAngleLabelOffset(selectedAngleIndex),
+          fontSize: LABEL_FONT_DEFAULT,
+          seq
+        };
+        changed = true;
+      }
+    }
+    // Add labels to selected polygon segments or vertices
+    else if (selectedPolygonIndex !== null) {
+      if (selectedSegments.size > 0) {
+        // Label selected segments
+        selectedSegments.forEach((key) => {
+          const parsed = parseSegmentKey(key);
+          if (!parsed || parsed.part !== 'segment') return;
+          const li = parsed.line;
+          if (!model.lines[li]) return;
+          if (!model.lines[li].label) {
+            const { text, seq } = nextLower();
+            model.lines[li].label = {
+              text,
+              color,
+              offset: defaultLineLabelOffset(li),
+              fontSize: LABEL_FONT_DEFAULT,
+              seq
+            };
+            changed = true;
+          }
+        });
+      } else if (!polygonHasLabels(selectedPolygonIndex)) {
+        // Label all vertices
+        const verts = polygonVerticesOrdered(selectedPolygonIndex);
+        verts.forEach((vi, i) => {
+          const idx = labelUpperIdx + i;
+          const text = seqLetter(idx, UPPER_SEQ);
+          model.points[vi].label = {
+            text,
+            color,
+            offset: defaultPointLabelOffset(vi),
+            fontSize: LABEL_FONT_DEFAULT,
+            seq: { kind: 'upper' as const, idx }
+          };
+        });
+        labelUpperIdx += verts.length;
+        changed = verts.length > 0;
+      }
+    }
+    // Add label to selected line
+    else if (selectedLineIndex !== null) {
+      if (!model.lines[selectedLineIndex].label) {
+        const { text, seq } = nextLower();
+        model.lines[selectedLineIndex].label = {
+          text,
+          color,
+          offset: defaultLineLabelOffset(selectedLineIndex),
+          fontSize: LABEL_FONT_DEFAULT,
+          seq
+        };
+        changed = true;
+      }
+    }
+    // Add label to selected point
+    else if (selectedPointIndex !== null) {
+      if (!model.points[selectedPointIndex].label) {
+        const { text, seq } = nextUpper();
+        model.points[selectedPointIndex].label = {
+          text,
+          color,
+          offset: defaultPointLabelOffset(selectedPointIndex),
+          fontSize: LABEL_FONT_DEFAULT,
+          seq
+        };
+        changed = true;
+      }
+    }
+    
+    // If we added a label to a selected object, switch back to move mode
+    if (changed) {
+      pushHistory();
+      mode = 'move';
+      updateToolButtons();
+      draw();
+      return;
+    }
+    // Otherwise stay in label mode and wait for user to click on an object
   }
   
   updateToolButtons();
@@ -2888,97 +2992,21 @@ function handleCanvasClick(ev: PointerEvent) {
     maybeRevertMode();
     updateSelectionButtons();
   } else if (mode === 'label') {
+    // Label mode - wait for user to click on an object
     const pointHit = findPoint({ x, y });
     const lineHit = findLine({ x, y });
     const angleHit = findAngleAt({ x, y }, currentHitRadius(1.5));
     const polyHit = lineHit ? polygonForLine(lineHit.line) : selectedPolygonIndex;
     const color = styleColorInput?.value || '#000';
-    let consumed = false;
     let changed = false;
   const polygonHasLabels = (polyIdx: number | null) => {
     if (polyIdx === null) return false;
     const verts = polygonVerticesOrdered(polyIdx);
     return verts.length > 0 && verts.every((vi) => !!model.points[vi]?.label);
   };
-    // apply to current selection first
-  if (selectedAngleIndex !== null) {
-    consumed = true;
-    if (!model.angles[selectedAngleIndex].label) {
-      const { text, seq } = nextGreek();
-      model.angles[selectedAngleIndex].label = {
-        text,
-        color,
-        offset: defaultAngleLabelOffset(selectedAngleIndex),
-        fontSize: LABEL_FONT_DEFAULT,
-        seq
-      };
-      changed = true;
-    }
-  } else if (selectedPolygonIndex !== null) {
-    consumed = true;
-    if (selectedSegments.size > 0) {
-      selectedSegments.forEach((key) => {
-        const parsed = parseSegmentKey(key);
-        if (!parsed || parsed.part !== 'segment') return;
-        const li = parsed.line;
-        if (!model.lines[li]) return;
-        if (!model.lines[li].label) {
-          const { text, seq } = nextLower();
-          model.lines[li].label = {
-            text,
-            color,
-            offset: defaultLineLabelOffset(li),
-            fontSize: LABEL_FONT_DEFAULT,
-            seq
-          };
-          changed = true;
-        }
-      });
-    } else if (!polygonHasLabels(selectedPolygonIndex)) {
-      const verts = polygonVerticesOrdered(selectedPolygonIndex);
-      verts.forEach((vi, i) => {
-        const idx = labelUpperIdx + i;
-        const text = seqLetter(idx, UPPER_SEQ);
-        model.points[vi].label = {
-          text,
-          color,
-          offset: defaultPointLabelOffset(vi),
-          fontSize: LABEL_FONT_DEFAULT,
-          seq: { kind: 'upper' as const, idx }
-        };
-      });
-      labelUpperIdx += verts.length;
-      changed = verts.length > 0;
-    }
-  } else if (selectedLineIndex !== null) {
-    consumed = true;
-    if (!model.lines[selectedLineIndex].label) {
-      const { text, seq } = nextLower();
-      model.lines[selectedLineIndex].label = {
-        text,
-        color,
-        offset: defaultLineLabelOffset(selectedLineIndex),
-        fontSize: LABEL_FONT_DEFAULT,
-        seq
-      };
-      changed = true;
-    }
-  } else if (selectedPointIndex !== null) {
-    consumed = true;
-    if (!model.points[selectedPointIndex].label) {
-      const { text, seq } = nextUpper();
-      model.points[selectedPointIndex].label = {
-        text,
-        color,
-        offset: defaultPointLabelOffset(selectedPointIndex),
-        fontSize: LABEL_FONT_DEFAULT,
-        seq
-      };
-      changed = true;
-    }
-  }
-    if (!consumed && angleHit !== null) {
-      consumed = true;
+    
+    // Click on angle
+    if (angleHit !== null) {
       if (!model.angles[angleHit].label) {
         const { text, seq } = nextGreek();
         model.angles[angleHit].label = {
@@ -2990,11 +3018,14 @@ function handleCanvasClick(ev: PointerEvent) {
         };
         selectedAngleIndex = angleHit;
         changed = true;
+        setMode('move');
+        updateToolButtons();
       } else {
         selectedAngleIndex = angleHit;
       }
-    } else if (pointHit !== null) {
-      consumed = true;
+    }
+    // Click on point
+    else if (pointHit !== null) {
       selectedPointIndex = pointHit;
       if (!model.points[pointHit].label) {
         const { text, seq } = nextUpper();
@@ -3006,9 +3037,12 @@ function handleCanvasClick(ev: PointerEvent) {
           seq
         };
         changed = true;
+        setMode('move');
+        updateToolButtons();
       }
-    } else if (polyHit !== null && selectedPolygonIndex === polyHit) {
-      consumed = true;
+    }
+    // Click on polygon
+    else if (polyHit !== null && selectedPolygonIndex === polyHit) {
       selectedPolygonIndex = polyHit;
       if (!polygonHasLabels(polyHit)) {
         const verts = polygonVerticesOrdered(polyHit);
@@ -3025,9 +3059,14 @@ function handleCanvasClick(ev: PointerEvent) {
         });
         labelUpperIdx += verts.length;
         changed = verts.length > 0;
+        if (changed) {
+          setMode('move');
+          updateToolButtons();
+        }
       }
-    } else if (lineHit && lineHit.part === 'segment') {
-      consumed = true;
+    }
+    // Click on line segment
+    else if (lineHit && lineHit.part === 'segment') {
       selectedLineIndex = lineHit.line;
       if (!model.lines[lineHit.line].label) {
         const { text, seq } = nextLower();
@@ -3039,8 +3078,12 @@ function handleCanvasClick(ev: PointerEvent) {
           seq
         };
         changed = true;
+        setMode('move');
+        updateToolButtons();
       }
-  } else {
+  }
+    // Free label (no object clicked)
+    else {
     const text = window.prompt('Etykieta:', '');
     if (text && text.trim()) {
       const clean = text.trim();
@@ -3065,15 +3108,12 @@ function handleCanvasClick(ev: PointerEvent) {
         }
       }
       model.labels.push({ text: clean, pos: { x, y }, color, fontSize: LABEL_FONT_DEFAULT, seq });
-      consumed = true;
       changed = true;
     }
   }
-    if (consumed) {
-      if (changed) {
-        draw();
-        pushHistory();
-      }
+    if (changed) {
+      draw();
+      pushHistory();
       maybeRevertMode();
       updateSelectionButtons();
     }
