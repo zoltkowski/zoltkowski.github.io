@@ -464,6 +464,7 @@
       <div class="modal-tabs">
         <button class="tab-btn active" data-tab="general">Ogólne</button>
         <button class="tab-btn" data-tab="buttons">Przyciski</button>
+        <button class="tab-btn" data-tab="appearance">Wygląd</button>
       </div>
       <div class="modal-body">
         <div id="tabGeneral" class="tab-content active">
@@ -517,6 +518,99 @@
           <div class="config-section">
             <div id="multiButtonConfig" class="button-config-area">
               <!-- Dynamic content will be added here -->
+            </div>
+          </div>
+        </div>
+        <div id="tabAppearance" class="tab-content">
+          <div class="appearance-config">
+            <div class="appearance-controls">
+              <div class="appearance-theme-toggle">
+                <button class="theme-btn active" data-theme="dark">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9 6 6 0 0 0 9 9Z"/></svg>
+                  Ciemny
+                </button>
+                <button class="theme-btn" data-theme="light">
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                  Jasny
+                </button>
+              </div>
+              
+              <div class="config-section">
+                <h3>Domyślne kolory</h3>
+                <div class="config-row">
+                  <label>Kolor tła:</label>
+                  <input type="color" id="themeBgColor" class="color-input">
+                </div>
+                <div class="config-row">
+                  <label>Kolor obrysu:</label>
+                  <input type="color" id="themeStrokeColor" class="color-input">
+                </div>
+                <div class="config-row">
+                  <label>Kolor wypełnienia:</label>
+                  <input type="color" id="themeFillColor" class="color-input">
+                </div>
+                <div class="config-row">
+                  <label>Kolor zaznaczenia:</label>
+                  <input type="color" id="themeHighlightColor" class="color-input">
+                </div>
+              </div>
+
+              <div class="config-section">
+                <h3>Domyślne rozmiary</h3>
+                <div class="config-row">
+                  <label>Grubość linii:</label>
+                  <div class="size-control">
+                    <button class="size-btn" data-action="decrease" data-target="lineWidth">−</button>
+                    <span class="size-value" id="themeLineWidthValue">2 px</span>
+                    <button class="size-btn" data-action="increase" data-target="lineWidth">+</button>
+                  </div>
+                </div>
+                <div class="config-row">
+                  <label>Rozmiar punktu:</label>
+                  <div class="size-control">
+                    <button class="size-btn" data-action="decrease" data-target="pointSize">−</button>
+                    <span class="size-value" id="themePointSizeValue">8 px</span>
+                    <button class="size-btn" data-action="increase" data-target="pointSize">+</button>
+                  </div>
+                </div>
+                <div class="config-row">
+                  <label>Promień łuku kąta:</label>
+                  <div class="size-control">
+                    <button class="size-btn" data-action="decrease" data-target="arcRadius">−</button>
+                    <span class="size-value" id="themeArcRadiusValue">24 px</span>
+                    <button class="size-btn" data-action="increase" data-target="arcRadius">+</button>
+                  </div>
+                </div>
+                <div class="config-row">
+                  <label>Rozmiar czcionki:</label>
+                  <div class="size-control">
+                    <button class="size-btn" data-action="decrease" data-target="fontSize">−</button>
+                    <span class="size-value" id="themeFontSizeValue">16 px</span>
+                    <button class="size-btn" data-action="increase" data-target="fontSize">+</button>
+                  </div>
+                </div>
+                <div class="config-row">
+                  <label>Szerokość zaznaczenia:</label>
+                  <div class="size-control">
+                    <button class="size-btn" data-action="decrease" data-target="highlightWidth">−</button>
+                    <span class="size-value" id="themeHighlightWidthValue">3 px</span>
+                    <button class="size-btn" data-action="increase" data-target="highlightWidth">+</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="config-section">
+                <button id="resetThemeDefaults" class="icon-btn" style="width: 100%; padding: 12px;">
+                  Przywróć domyślne
+                </button>
+              </div>
+            </div>
+            
+            <div class="appearance-preview">
+              <h3>Podgląd</h3>
+              <div class="preview-canvas-wrapper">
+                <canvas id="previewCanvas" width="400" height="400"></canvas>
+              </div>
             </div>
           </div>
         </div>

@@ -232,7 +232,8 @@ const THEME_PRESETS = {
         lineWidth: 2,
         angleStrokeWidth: 2,
         angleDefaultRadius: 28,
-        midpointColor: '#9ca3af'
+        midpointColor: '#9ca3af',
+        bg: '#111827'
     },
     light: {
         palette: DEFAULT_COLORS_LIGHT,
@@ -243,7 +244,8 @@ const THEME_PRESETS = {
         lineWidth: 2,
         angleStrokeWidth: 2,
         angleDefaultRadius: 28,
-        midpointColor: '#737373'
+        midpointColor: '#737373',
+        bg: '#ffffff'
     }
 };
 const THEME = { ...THEME_PRESETS.dark };
@@ -272,6 +274,43 @@ const HIGHLIGHT_LINE = { color: THEME.highlight, width: 1.5, dash: [4, 4] };
 const LABEL_HIT_RADIUS = 18;
 const DEBUG_PANEL_MARGIN = { x: 12, y: 12 };
 const DEBUG_PANEL_TOP_MIN = 56;
+const themeOverrides = {
+    dark: {},
+    light: {}
+};
+// Load theme overrides from localStorage
+const THEME_OVERRIDES_KEY = 'geometry.themeOverrides';
+function loadThemeOverrides() {
+    try {
+        const stored = localStorage.getItem(THEME_OVERRIDES_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.dark)
+                themeOverrides.dark = parsed.dark;
+            if (parsed.light)
+                themeOverrides.light = parsed.light;
+        }
+    }
+    catch {
+        // ignore
+    }
+}
+function saveThemeOverrides() {
+    try {
+        localStorage.setItem(THEME_OVERRIDES_KEY, JSON.stringify(themeOverrides));
+    }
+    catch {
+        // ignore
+    }
+}
+if (typeof window !== 'undefined') {
+    loadThemeOverrides();
+}
+function applyThemeWithOverrides(theme) {
+    const base = THEME_PRESETS[theme];
+    const overrides = themeOverrides[theme];
+    Object.assign(THEME, base, overrides);
+}
 let canvas = null;
 let ctx = null;
 let model = createEmptyModel();
@@ -934,7 +973,8 @@ function draw() {
     if (!canvas || !ctx)
         return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = THEME.bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(dpr * zoomFactor, 0, 0, dpr * zoomFactor, panOffset.x * dpr, panOffset.y * dpr);
     // Helper function to check if a point should hide edges when hidden
     const pointHiddenForEdges = isPointHiddenForEdges;
@@ -4625,7 +4665,8 @@ async function exportButtonConfiguration() {
         version: 1,
         buttonOrder: buttonOrder,
         multiButtons: buttonConfig.multiButtons,
-        secondRow: buttonConfig.secondRow
+        secondRow: buttonConfig.secondRow,
+        themeOverrides: themeOverrides
     };
     const json = JSON.stringify(config, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
@@ -4669,6 +4710,17 @@ function importButtonConfiguration(jsonString) {
         if (config.secondRow && typeof config.secondRow === 'object') {
             buttonConfig.secondRow = config.secondRow;
         }
+        // Restore theme overrides
+        if (config.themeOverrides && typeof config.themeOverrides === 'object') {
+            themeOverrides.dark = config.themeOverrides.dark || {};
+            themeOverrides.light = config.themeOverrides.light || {};
+            saveThemeOverrides();
+            applyThemeWithOverrides(currentTheme);
+            // Refresh appearance tab UI if available
+            if (typeof window.refreshAppearanceTab === 'function') {
+                window.refreshAppearanceTab();
+            }
+        }
         // Save to localStorage
         saveButtonConfig();
         // Reload UI
@@ -4679,6 +4731,188 @@ function importButtonConfiguration(jsonString) {
         console.error('Failed to import configuration:', e);
         return false;
     }
+}
+function initAppearanceTab() {
+    // Przyciski wyboru motywu
+    const themeBtns = document.querySelectorAll('.appearance-theme-toggle .theme-btn');
+    const previewCanvas = document.getElementById('previewCanvas');
+    let activeTheme = currentTheme;
+    // Ustawienia motywu
+    const themeBgColor = document.getElementById('themeBgColor');
+    const themeStrokeColor = document.getElementById('themeStrokeColor');
+    const themeFillColor = document.getElementById('themeFillColor');
+    const themeHighlightColor = document.getElementById('themeHighlightColor');
+    const themeLineWidthValue = document.getElementById('themeLineWidthValue');
+    const themePointSizeValue = document.getElementById('themePointSizeValue');
+    const themeArcRadiusValue = document.getElementById('themeArcRadiusValue');
+    const themeFontSizeValue = document.getElementById('themeFontSizeValue');
+    const themeHighlightWidthValue = document.getElementById('themeHighlightWidthValue');
+    const resetBtn = document.getElementById('resetThemeDefaults');
+    // Wczytaj aktualne wartości
+    function loadThemeValues() {
+        const theme = activeTheme;
+        const base = THEME_PRESETS[theme];
+        const overrides = themeOverrides[theme];
+        const current = { ...base, ...overrides };
+        if (themeBgColor)
+            themeBgColor.value = current.bg || base.bg;
+        if (themeStrokeColor)
+            themeStrokeColor.value = current.defaultStroke || base.defaultStroke;
+        if (themeFillColor)
+            themeFillColor.value = current.defaultStroke || base.defaultStroke;
+        if (themeHighlightColor)
+            themeHighlightColor.value = current.highlight || base.highlight;
+        if (themeLineWidthValue)
+            themeLineWidthValue.textContent = `${current.lineWidth || base.lineWidth} px`;
+        if (themePointSizeValue)
+            themePointSizeValue.textContent = `${current.pointSize || base.pointSize} px`;
+        if (themeArcRadiusValue)
+            themeArcRadiusValue.textContent = `${current.angleDefaultRadius || base.angleDefaultRadius} px`;
+        if (themeFontSizeValue)
+            themeFontSizeValue.textContent = `${LABEL_FONT_DEFAULT} px`;
+        if (themeHighlightWidthValue)
+            themeHighlightWidthValue.textContent = `${HIGHLIGHT_LINE.width} px`;
+        // Aktualizuj przyciski motywu
+        themeBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.theme === theme);
+        });
+        drawPreview();
+    }
+    // Make loadThemeValues accessible globally for configuration import
+    window.refreshAppearanceTab = loadThemeValues;
+    // Przełączanie motywu
+    themeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const theme = btn.dataset.theme;
+            if (theme) {
+                activeTheme = theme;
+                loadThemeValues();
+            }
+        });
+    });
+    // Zapisz zmianę
+    function saveThemeValue(key, value) {
+        themeOverrides[activeTheme][key] = value;
+        saveThemeOverrides();
+        if (activeTheme === currentTheme) {
+            applyThemeWithOverrides(currentTheme);
+            draw();
+        }
+        drawPreview();
+    }
+    // Kolory
+    themeBgColor?.addEventListener('input', (e) => {
+        saveThemeValue('bg', e.target.value);
+    });
+    themeStrokeColor?.addEventListener('input', (e) => {
+        saveThemeValue('defaultStroke', e.target.value);
+    });
+    themeHighlightColor?.addEventListener('input', (e) => {
+        saveThemeValue('highlight', e.target.value);
+    });
+    // Rozmiary
+    const sizeBtns = document.querySelectorAll('.size-btn');
+    sizeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            const target = btn.dataset.target;
+            if (!action || !target)
+                return;
+            const base = THEME_PRESETS[activeTheme];
+            const overrides = themeOverrides[activeTheme];
+            const current = { ...base, ...overrides };
+            const delta = action === 'increase' ? 1 : -1;
+            if (target === 'lineWidth') {
+                const newValue = Math.max(1, Math.min(10, (current.lineWidth || base.lineWidth) + delta));
+                saveThemeValue('lineWidth', newValue);
+                if (themeLineWidthValue)
+                    themeLineWidthValue.textContent = `${newValue} px`;
+            }
+            else if (target === 'pointSize') {
+                const newValue = Math.max(1, Math.min(10, (current.pointSize || base.pointSize) + delta));
+                saveThemeValue('pointSize', newValue);
+                if (themePointSizeValue)
+                    themePointSizeValue.textContent = `${newValue} px`;
+            }
+            else if (target === 'arcRadius') {
+                const newValue = Math.max(16, Math.min(48, (current.angleDefaultRadius || base.angleDefaultRadius) + delta * 2));
+                saveThemeValue('angleDefaultRadius', newValue);
+                if (themeArcRadiusValue)
+                    themeArcRadiusValue.textContent = `${newValue} px`;
+            }
+        });
+    });
+    // Reset
+    resetBtn?.addEventListener('click', () => {
+        themeOverrides[activeTheme] = {};
+        saveThemeOverrides();
+        if (activeTheme === currentTheme) {
+            applyThemeWithOverrides(currentTheme);
+            draw();
+        }
+        loadThemeValues();
+    });
+    // Rysowanie podglądu
+    function drawPreview() {
+        if (!previewCanvas)
+            return;
+        const ctx = previewCanvas.getContext('2d');
+        if (!ctx)
+            return;
+        const base = THEME_PRESETS[activeTheme];
+        const overrides = themeOverrides[activeTheme];
+        const theme = { ...base, ...overrides };
+        const w = previewCanvas.width;
+        const h = previewCanvas.height;
+        // Tło
+        ctx.fillStyle = theme.bg;
+        ctx.fillRect(0, 0, w, h);
+        // Przykładowy trójkąt
+        const points = [
+            { x: w * 0.25, y: h * 0.7 },
+            { x: w * 0.75, y: h * 0.7 },
+            { x: w * 0.5, y: h * 0.3 }
+        ];
+        // Boki
+        ctx.strokeStyle = theme.defaultStroke;
+        ctx.lineWidth = theme.lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        points.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.closePath();
+        ctx.stroke();
+        // Podświetlony bok
+        ctx.strokeStyle = theme.highlight;
+        ctx.lineWidth = theme.lineWidth + 1.5;
+        ctx.beginPath();
+        ctx.moveTo(points[1].x, points[1].y);
+        ctx.lineTo(points[2].x, points[2].y);
+        ctx.stroke();
+        // Punkty
+        points.forEach((p, i) => {
+            ctx.fillStyle = i === 1 ? theme.highlight : theme.defaultStroke;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, theme.pointSize + 2, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        // Kąt
+        const angleCenter = points[1];
+        ctx.strokeStyle = theme.defaultStroke;
+        ctx.lineWidth = theme.angleStrokeWidth;
+        ctx.beginPath();
+        ctx.arc(angleCenter.x, angleCenter.y, theme.angleDefaultRadius, Math.PI * 0.7, Math.PI * 1.0);
+        ctx.stroke();
+        // Etykiety
+        ctx.fillStyle = theme.defaultStroke;
+        ctx.font = `${LABEL_FONT_DEFAULT}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('A', points[0].x, points[0].y + 20);
+        ctx.fillText('B', points[1].x, points[1].y + 20);
+        ctx.fillText('C', points[2].x, points[2].y - 20);
+    }
+    // Inicjalizacja
+    loadThemeValues();
 }
 function initRuntime() {
     canvas = document.getElementById('canvas');
@@ -6968,6 +7202,8 @@ function initRuntime() {
     updateOptionButtons();
     updateColorButtons();
     pushHistory();
+    // Appearance tab initialization
+    initAppearanceTab();
     // Apply button configuration after DOM is ready
     applyButtonConfiguration();
 }
@@ -9111,9 +9347,8 @@ function setTheme(theme) {
     const root = document.documentElement;
     body?.classList.remove('theme-dark', 'theme-light');
     root?.classList.remove('theme-dark', 'theme-light');
-    const config = THEME_PRESETS[theme];
-    Object.assign(THEME, config);
-    const palette = config.palette;
+    applyThemeWithOverrides(theme);
+    const palette = THEME.palette;
     if (theme === 'light') {
         body?.classList.add('theme-light');
         root?.classList.add('theme-light');

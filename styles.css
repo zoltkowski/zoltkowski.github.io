@@ -170,7 +170,7 @@ input[type="color"] { background: transparent; border: 1px solid #374151; paddin
 /* Settings Modal */
 .modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; overscroll-behavior: contain; }
 .modal-content { background: var(--bg); border: 1px solid var(--panel-border); border-radius: 16px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); max-width: 800px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: contain; }
-.settings-modal { max-width: 900px; }
+.settings-modal { max-width: 1200px; }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--panel-border); }
 .modal-header h2 { font-size: 20px; font-weight: 600; margin: 0; }
 .modal-tabs { display: flex; gap: 4px; padding: 8px 20px 0; border-bottom: 1px solid var(--panel-border); background: var(--panel); }
@@ -200,3 +200,32 @@ input[type="color"] { background: transparent; border: 1px solid #374151; paddin
 .config-tool-item:active { cursor: grabbing; }
 .group-remove-btn { margin-left: auto; width: 24px; height: 24px; padding: 0; background: transparent; border: none; font-size: 18px; opacity: 0.6; cursor: pointer; transition: opacity 0.2s; }
 .group-remove-btn:hover { opacity: 1; }
+
+/* Appearance Tab */
+.appearance-config { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 16px 12px; }
+.appearance-controls { display: flex; flex-direction: column; gap: 20px; }
+.appearance-preview { display: flex; flex-direction: column; }
+.appearance-preview h3 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+.preview-canvas-wrapper { background: var(--bg); border: 2px solid var(--panel-border); border-radius: 8px; padding: 16px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
+#previewCanvas { max-width: 100%; max-height: 100%; border-radius: 4px; }
+
+.appearance-theme-toggle { display: flex; gap: 8px; }
+.theme-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; background: var(--btn); border: 2px solid var(--btn-border); border-radius: 8px; cursor: pointer; font-weight: 500; transition: all 0.2s; }
+.theme-btn:hover { background: var(--btn-hover); }
+.theme-btn.active { border-color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
+.theme-btn .icon { width: 20px; height: 20px; }
+
+.config-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
+.config-row label { font-size: 14px; font-weight: 500; }
+.color-input { width: 60px; height: 36px; border: 2px solid var(--btn-border); border-radius: 6px; cursor: pointer; }
+.size-control { display: flex; align-items: center; gap: 12px; }
+.size-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: var(--btn); border: 1px solid var(--btn-border); border-radius: 6px; cursor: pointer; font-size: 18px; font-weight: 600; transition: all 0.2s; }
+.size-btn:hover { background: var(--btn-hover); }
+.size-btn:active { transform: scale(0.9); }
+.size-value { min-width: 48px; text-align: center; font-size: 14px; font-weight: 500; }
+
+@media (max-width: 900px) {
+  .appearance-config { grid-template-columns: 1fr; }
+  .appearance-preview { order: -1; }
+}
+
