@@ -6895,6 +6895,7 @@ function initRuntime() {
             if (linesToRemove.length > 0) {
                 const remap = new Map();
                 model.lines.forEach((_, idx) => remap.set(idx, idx));
+                remapAngles(remap);
                 remapPolygons(remap);
             }
             const circlesToRemove = Array.from(multiSelectedCircles);
@@ -7046,6 +7047,7 @@ function initRuntime() {
                     }
                 });
                 model.lines = kept;
+                remapAngles(remap);
                 remapPolygons(remap);
                 const orphanVertices = Array.from(polygonPoints).filter((pi) => !pointUsedAnywhere(pi));
                 if (orphanVertices.length) {
@@ -7100,6 +7102,7 @@ function initRuntime() {
                         remap.set(idx, idx > lineIdx ? idx - 1 : idx);
                 });
                 model.lines.splice(lineIdx, 1);
+                remapAngles(remap);
                 remapPolygons(remap);
                 // detach deleted line as parent from points that referenced it
                 if (deletedLineId) {
@@ -11174,6 +11177,7 @@ function removePointsAndRelated(points, removeLines = false) {
             }
         });
         model.lines = kept;
+        remapAngles(remap);
         remapPolygons(remap);
         model.circles = model.circles.filter((circle) => {
             const removeCircle = toRemove.has(circle.center) ||
@@ -11212,6 +11216,7 @@ function removePointsAndRelated(points, removeLines = false) {
             rebuiltLines.push(rebuilt);
         });
         model.lines = rebuiltLines;
+        remapAngles(remap);
         remapPolygons(remap);
         model.circles = model.circles
             .map((circle) => {
@@ -11287,6 +11292,7 @@ function removeParallelLinesReferencing(lineId) {
         }
     });
     model.lines = kept;
+    remapAngles(remap);
     remapPolygons(remap);
     if (helperPoints.length) {
         const uniqueHelpers = Array.from(new Set(helperPoints));
@@ -11331,6 +11337,7 @@ function removePerpendicularLinesReferencing(lineId) {
         }
     });
     model.lines = kept;
+    remapAngles(remap);
     remapPolygons(remap);
     if (helperPoints.length) {
         const uniqueHelpers = Array.from(new Set(helperPoints));
@@ -12047,6 +12054,22 @@ function ensurePolygonClosed(poly) {
     if (newLineIndices.length === 0)
         return poly;
     return { ...poly, lines: [...poly.lines, ...newLineIndices] };
+}
+function remapAngles(lineRemap) {
+    model.angles = model.angles.filter((ang) => {
+        const newLeg1Line = lineRemap.get(ang.leg1.line);
+        const newLeg2Line = lineRemap.get(ang.leg2.line);
+        // Remove angle if either of its legs references a deleted line (mapped to -1 or undefined)
+        if (newLeg1Line === undefined || newLeg1Line < 0 || newLeg2Line === undefined || newLeg2Line < 0) {
+            if (ang.label)
+                reclaimLabel(ang.label);
+            return false;
+        }
+        // Update the angle's leg line references
+        ang.leg1.line = newLeg1Line;
+        ang.leg2.line = newLeg2Line;
+        return true;
+    });
 }
 function remapPolygons(lineRemap) {
     const remapped = model.polygons
