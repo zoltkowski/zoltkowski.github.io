@@ -6133,6 +6133,7 @@ function initRuntime() {
       const dx = x - dragStart.x;
       const dy = y - dragStart.y;
       const movedPoints = new Set<number>();
+      let dragStartAlreadySet = false; // Flag to prevent overwriting dragStart for constrained points
 
       if (selectedInkStrokeIndex !== null) {
         const stroke = model.inkStrokes[selectedInkStrokeIndex];
@@ -6377,9 +6378,7 @@ function initRuntime() {
             : linesWithPoint[0];
         if (mainLineIdx !== undefined) {
           const mainLine = model.lines[mainLineIdx];
-          const isEndpoint =
-            selectedPointIndex === mainLine.points[0] ||
-            selectedPointIndex === mainLine.points[mainLine.points.length - 1];
+          const isEndpoint = mainLine.defining_points.includes(selectedPointIndex);
           const isDefining = isDefiningPointOfLine(selectedPointIndex, mainLineIdx);
           
           // Defining points can move freely even if they're not endpoints
@@ -6511,8 +6510,11 @@ function initRuntime() {
             updateParallelLinesForLine(mainLineIdx);
             updatePerpendicularLinesForLine(mainLineIdx);
           } else if (mainLine.points.length >= 2) {
-            const origin = model.points[mainLine.points[0]];
-            const end = model.points[mainLine.points[mainLine.points.length - 1]];
+            // Use DEFINING points to establish the line, not first/last points in the array
+            const definingIdx0 = mainLine.defining_points[0];
+            const definingIdx1 = mainLine.defining_points[1];
+            const origin = model.points[definingIdx0];
+            const end = model.points[definingIdx1];
             if (origin && end) {
               const dir = normalize({ x: end.x - origin.x, y: end.y - origin.y });
               const len = Math.hypot(end.x - origin.x, end.y - origin.y) || 1;
@@ -6537,6 +6539,7 @@ function initRuntime() {
                   movedPoints.add(pi);
                 });
               }
+
               let constrained = newPos;
               if (parentLineIdx !== null) {
                 constrained = constrainToLineIdx(parentLineIdx ?? mainLineIdx, constrained);
@@ -6544,12 +6547,23 @@ function initRuntime() {
               constrained = constrainToCircles(selectedPointIndex, constrained);
               model.points[selectedPointIndex] = { ...p, ...constrained };
               movedPoints.add(selectedPointIndex);
-              applyLineFractions(mainLineIdx);
+              // DON'T call applyLineFractions - it would reset our position based on old fractions!
+              // applyLineFractions(mainLineIdx);
               updateIntersectionsForLine(mainLineIdx);
               updateParallelLinesForLine(mainLineIdx);
               updatePerpendicularLinesForLine(mainLineIdx);
+              // Set dragStart to the new constrained position (what was actually applied)
+              dragStart = { x: constrained.x, y: constrained.y };
+              dragStartAlreadySet = true; // Only for sliding mode - constrained to line
             }
           }
+          movedDuringDrag = true;
+          movedPoints.forEach((pi) => {
+            updateMidpointsForPoint(pi);
+            updateCirclesForPoint(pi);
+          });
+          draw();
+          // Mark that we've already set dragStart (for sliding constrained points)
           if (linesWithPoint.length > 1) {
             const extraLines = new Set<number>();
             linesWithPoint.forEach((li) => {
@@ -6600,6 +6614,14 @@ function initRuntime() {
               updatePerpendicularLinesForLine(li);
             }
           });
+          
+          dragStart = { x, y };
+          movedDuringDrag = true;
+          movedPoints.forEach((pi) => {
+            updateMidpointsForPoint(pi);
+            updateCirclesForPoint(pi);
+          });
+          draw();
         }
       } else if (selectedPolygonIndex !== null && selectedSegments.size === 0) {
         const poly = model.polygons[selectedPolygonIndex];
@@ -6738,7 +6760,9 @@ function initRuntime() {
           updatePerpendicularLinesForLine(selectedLineIndex);
         }
       }
-      dragStart = { x, y };
+      if (typeof dragStartAlreadySet === 'undefined' || !dragStartAlreadySet) {
+        dragStart = { x, y };
+      }
       movedDuringDrag = true;
       movedPoints.forEach((pi) => {
         updateMidpointsForPoint(pi);
@@ -6748,7 +6772,8 @@ function initRuntime() {
       if (selectedPointIndex !== null) {
         const linesWithPoint = findLinesContainingPoint(selectedPointIndex);
         linesWithPoint.forEach(li => {
-          if (selectedPointIndex !== null && isDefiningPointOfLine(selectedPointIndex, li)) {
+          const isDefining = selectedPointIndex !== null && isDefiningPointOfLine(selectedPointIndex, li);
+          if (isDefining) {
             const line = model.lines[li];
             if (line && line.points.length >= 2) {
               // Reposition non-defining points to stay on the line
@@ -8317,8 +8342,12 @@ function captureLineContext(pointIdx: number): { lineIdx: number; fractions: num
   if (lineIdx === undefined) return null;
   const line = model.lines[lineIdx];
   if (line.points.length < 2) return null;
-  const origin = model.points[line.points[0]];
-  const end = model.points[line.points[line.points.length - 1]];
+  // Use defining points if available, otherwise fall back to first/last (e.g. for free lines without defining points?)
+  // Actually all lines should have defining points or be defined by 2 points.
+  const def0 = line.defining_points?.[0] ?? line.points[0];
+  const def1 = line.defining_points?.[1] ?? line.points[line.points.length - 1];
+  const origin = model.points[def0];
+  const end = model.points[def1];
   if (!origin || !end) return null;
   const dir = normalize({ x: end.x - origin.x, y: end.y - origin.y });
   const len = Math.hypot(end.x - origin.x, end.y - origin.y);
@@ -8336,8 +8365,10 @@ function applyLineFractions(lineIdx: number) {
   if (!lineDragContext || lineDragContext.lineIdx !== lineIdx) return;
   const line = model.lines[lineIdx];
   if (line.points.length < 2) return;
-  const origin = model.points[line.points[0]];
-  const end = model.points[line.points[line.points.length - 1]];
+  const def0 = line.defining_points?.[0] ?? line.points[0];
+  const def1 = line.defining_points?.[1] ?? line.points[line.points.length - 1];
+  const origin = model.points[def0];
+  const end = model.points[def1];
   if (!origin || !end) return;
   const dir = normalize({ x: end.x - origin.x, y: end.y - origin.y });
   const len = Math.hypot(end.x - origin.x, end.y - origin.y);
@@ -8350,8 +8381,9 @@ function applyLineFractions(lineIdx: number) {
   if (fractions.length !== line.points.length) {
     // Use the stored fractions as a base, but recalculate based on current positions
     // This handles cases where points were added to the line after drag started
-    const oldOrigin = model.points[line.points[0]];
-    const oldEnd = model.points[line.points[line.points.length - 1]];
+    // Use defining points for recalculation too
+    const oldOrigin = model.points[def0];
+    const oldEnd = model.points[def1];
     if (!oldOrigin || !oldEnd) return;
     const oldDir = normalize({ x: oldEnd.x - oldOrigin.x, y: oldEnd.y - oldOrigin.y });
     const oldLen = Math.hypot(oldEnd.x - oldOrigin.x, oldEnd.y - oldOrigin.y);
@@ -12223,8 +12255,11 @@ function constrainToLineIdx(lineIdx: number | null | undefined, desired: { x: nu
   if (lineIdx === null || lineIdx === undefined) return desired;
   const line = model.lines[lineIdx];
   if (!line || line.points.length < 2) return desired;
-  const a = model.points[line.points[0]];
-  const b = model.points[line.points[line.points.length - 1]];
+  // Use DEFINING points to establish the line, not first/last in sorted array
+  const aIdx = line.defining_points?.[0] ?? line.points[0];
+  const bIdx = line.defining_points?.[1] ?? line.points[line.points.length - 1];
+  const a = model.points[aIdx];
+  const b = model.points[bIdx];
   if (!a || !b) return desired;
   return projectPointOnLine(desired, a, b);
 }
