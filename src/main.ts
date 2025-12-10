@@ -7555,11 +7555,13 @@ function initRuntime() {
     const newLineSelection = new Set<number>();
     lineRemap.forEach((newIdx, _) => newLineSelection.add(newIdx));
     
-    // Offset cloned free points slightly so they don't overlap with originals
+    // Offset cloned points slightly so they don't overlap with originals.
+    // Apply the same translation to ALL cloned points (not only free points)
+    // to preserve distances between them — cloning must be a pure shift.
     const CLONE_OFFSET = 20;
     newPointSelection.forEach(idx => {
       const pt = model.points[idx];
-      if (pt && pt.construction_kind === 'free') {
+      if (pt) {
         model.points[idx] = { ...pt, x: pt.x + CLONE_OFFSET, y: pt.y + CLONE_OFFSET };
       }
     });
