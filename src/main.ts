@@ -757,7 +757,12 @@ type CircleDragContext = {
   originals: Map<number, { x: number; y: number }>;
   dependentLines?: Map<number, number[]>;
 };
+type PolygonDragContext = {
+  polygonIdx: number;
+  dependentLines: Map<number, number[]>;
+};
 let circleDragContext: CircleDragContext | null = null;
+let polygonDragContext: PolygonDragContext | null = null;
 let draggingSelection = false;
 let measurementScale: number | null = null; // pixels per unit
 let measurementReferenceSegment: { lineIdx: number; segIdx: number } | null = null;
@@ -4619,6 +4624,27 @@ function handleCanvasClick(ev: PointerEvent) {
         selectedLineIndex = lineHit.line;
         selectedArcSegments.clear();
         selectedAngleIndex = null;
+        
+        // Capture dependent lines for polygon drag
+        const poly = model.polygons[polyIdx];
+        const dependentLines = new Map<number, number[]>();
+        if (poly) {
+          const pointsInPoly = new Set<number>();
+          poly.lines.forEach((li) => {
+            const line = model.lines[li];
+            line?.points.forEach((pi) => pointsInPoly.add(pi));
+          });
+          
+          pointsInPoly.forEach(pIdx => {
+            const lines = findLinesContainingPoint(pIdx);
+            lines.forEach(lIdx => {
+              if (!poly.lines.includes(lIdx) && isDefiningPointOfLine(pIdx, lIdx) && !dependentLines.has(lIdx)) {
+                dependentLines.set(lIdx, calculateLineFractions(lIdx));
+              }
+            });
+          });
+        }
+        polygonDragContext = { polygonIdx: polyIdx, dependentLines };
       } else {
         if (selectedLineIndex === lineHit.line) {
           if (selectedSegments.size === 0) {
@@ -7446,6 +7472,13 @@ function initRuntime() {
             updateParallelLinesForLine(li);
             updatePerpendicularLinesForLine(li);
           });
+
+          if (polygonDragContext && polygonDragContext.polygonIdx === selectedPolygonIndex) {
+            polygonDragContext.dependentLines.forEach((fractions, lIdx) => {
+              applyFractionsToLine(lIdx, fractions);
+              updateIntersectionsForLine(lIdx);
+            });
+          }
         }
       } else if (selectedLineIndex !== null) {
         const line = model.lines[selectedLineIndex];
@@ -7709,6 +7742,7 @@ function initRuntime() {
     draggingLabel = null;
     draggingCircleCenterAngles = null;
     circleDragContext = null;
+    polygonDragContext = null;
     isPanning = false;
     pendingPanCandidate = null;
     const snapInfo = activeAxisSnap;
