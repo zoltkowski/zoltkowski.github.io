@@ -847,11 +847,17 @@ let labelGreekVisible = false;
 let labelGreekUppercase = false;
 // Predefined letter sets (unified definitions)
 const GREEK_LOWER = [
-  'α','β','γ','δ','ε','ζ','η','θ','ι','κ','λ','μ','ν','ξ','ο','π','ρ','σ','τ','υ','φ','χ','ψ','ω'
+  'α','β','γ','δ','ε','ζ','η','θ','λ','μ','ξ','π','σ','τ','φ','χ','ψ', 'Γ','Θ','Π','Σ','Φ','Ψ','Ω'
 ];
-const GREEK_UPPER = [
-  'Α','Β','Γ','Δ','Ε','Ζ','Η','Θ','Ι','Κ','Λ','Μ','Ν','Ξ','Ο','Π','Ρ','Σ','Τ','Υ','Φ','Χ','Ψ','Ω'
-];
+// const GREEK_UPPER = [
+//   'Γ','Θ','Π','Σ','Φ','Ψ','Ω'
+// ];
+// const GREEK_LOWER = [
+//   'α','β','γ','δ','ε','ζ','η','θ','ι','κ','λ','μ','ν','ξ','ο','π','ρ','σ','τ','υ','φ','χ','ψ','ω'
+// ];
+// const GREEK_UPPER = [
+//   'Α','Β','Γ','Δ','Ε','Ζ','Η','Θ','Ι','Κ','Λ','Μ','Ν','Ξ','Ο','Π','Ρ','Σ','Τ','Υ','Φ','Χ','Ψ','Ω'
+// ];
 const LABEL_SYMBOLS = [
   '⟂', '∥', '∦', '∈', '∩', '∪', '△', '∼','∢', '⇐', '⇒', '⇔', '°'
 ];
@@ -5817,7 +5823,7 @@ function initLabelKeypad() {
   const count = Math.max(GREEK_LOWER.length, SCRIPT_LOWER.length);
   for (let i = 0; i < count; i++) {
     const lower = GREEK_LOWER[i];
-    const upper = GREEK_UPPER[i] || (lower ? lower.toUpperCase() : '');
+    const upper = lower ? lower.toUpperCase() : ''; // GREEK_UPPER[i] || (lower ? lower.toUpperCase() : '');
     
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -9950,16 +9956,18 @@ function refreshLabelKeyboard(labelEditing: boolean) {
     }
   });
   if (labelGreekShiftBtn) {
-    const visible = labelEditing && labelGreekVisible;
-    labelGreekShiftBtn.style.display = visible ? 'inline-flex' : 'none';
-    labelGreekShiftBtn.classList.toggle('active', labelGreekUppercase && visible);
-    labelGreekShiftBtn.setAttribute('aria-pressed', labelGreekUppercase ? 'true' : 'false');
+    // const visible = labelEditing && labelGreekVisible;
+    // labelGreekShiftBtn.style.display = visible ? 'inline-flex' : 'none';
+    labelGreekShiftBtn.style.display = 'none';
+    // labelGreekShiftBtn.classList.toggle('active', labelGreekUppercase && visible);
+    // labelGreekShiftBtn.setAttribute('aria-pressed', labelGreekUppercase ? 'true' : 'false');
   }
   if (labelScriptBtn) {
-    const visible = labelEditing && labelGreekVisible;
-    labelScriptBtn.style.display = visible ? 'inline-flex' : 'none';
-    labelScriptBtn.classList.toggle('active', labelScriptVisible && visible);
-    labelScriptBtn.setAttribute('aria-pressed', labelScriptVisible ? 'true' : 'false');
+    // const visible = labelEditing && labelGreekVisible;
+    // labelScriptBtn.style.display = visible ? 'inline-flex' : 'none';
+    labelScriptBtn.style.display = 'none';
+    // labelScriptBtn.classList.toggle('active', labelScriptVisible && visible);
+    // labelScriptBtn.setAttribute('aria-pressed', labelScriptVisible ? 'true' : 'false');
   }
 }
 
