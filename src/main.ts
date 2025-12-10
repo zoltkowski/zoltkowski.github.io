@@ -7247,35 +7247,38 @@ function initRuntime() {
             });
 
             // Update lines where the moved center point is a defining point
-            const linesWithPoint = findLinesContainingPoint(selectedPointIndex);
-            linesWithPoint.forEach((lineIdx) => {
-              const line = model.lines[lineIdx];
-              if (!line || !line.defining_points.includes(selectedPointIndex)) return;
-              
-              const definingPoints = line.defining_points.map(i => model.points[i]).filter(Boolean) as Point[];
-              if (definingPoints.length < 2) return;
-              
-              const [p1, p2] = definingPoints;
-              const dx = p2.x - p1.x;
-              const dy = p2.y - p1.y;
-              const len = Math.hypot(dx, dy);
-              if (len < 1e-9) return;
-              const dir = { x: dx / len, y: dy / len };
-              
-              line.points.forEach((pIdx) => {
-                if (line.defining_points.includes(pIdx)) return;
-                const pt = model.points[pIdx];
-                if (!pt) return;
+            if (selectedPointIndex !== null) {
+              const idx = selectedPointIndex;
+              const linesWithPoint = findLinesContainingPoint(idx);
+              linesWithPoint.forEach((lineIdx) => {
+                const line = model.lines[lineIdx];
+                if (!line || !line.defining_points.includes(idx)) return;
                 
-                // Project point onto the new line
-                const projection = (pt.x - p1.x) * dir.x + (pt.y - p1.y) * dir.y;
-                const newPos = { x: p1.x + dir.x * projection, y: p1.y + dir.y * projection };
+                const definingPoints = line.defining_points.map(i => model.points[i]).filter(Boolean) as Point[];
+                if (definingPoints.length < 2) return;
                 
-                model.points[pIdx] = { ...pt, ...newPos };
-                movedPoints.add(pIdx);
+                const [p1, p2] = definingPoints;
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const len = Math.hypot(dx, dy);
+                if (len < 1e-9) return;
+                const dir = { x: dx / len, y: dy / len };
+                
+                line.points.forEach((pIdx) => {
+                  if (line.defining_points.includes(pIdx)) return;
+                  const pt = model.points[pIdx];
+                  if (!pt) return;
+                  
+                  // Project point onto the new line
+                  const projection = (pt.x - p1.x) * dir.x + (pt.y - p1.y) * dir.y;
+                  const newPos = { x: p1.x + dir.x * projection, y: p1.y + dir.y * projection };
+                  
+                  model.points[pIdx] = { ...pt, ...newPos };
+                  movedPoints.add(pIdx);
+                });
+                updateIntersectionsForLine(lineIdx);
               });
-              updateIntersectionsForLine(lineIdx);
-            });
+            }
 
             dragStart = { x, y };
             movedDuringDrag = true;
