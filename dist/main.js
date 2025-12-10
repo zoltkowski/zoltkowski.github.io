@@ -532,20 +532,8 @@ const GREEK_LOWER = [
 const GREEK_UPPER = [
     'Α', 'Β', 'Γ', 'Δ', 'Ε', 'Ζ', 'Η', 'Θ', 'Ι', 'Κ', 'Λ', 'Μ', 'Ν', 'Ξ', 'Ο', 'Π', 'Ρ', 'Σ', 'Τ', 'Υ', 'Φ', 'Χ', 'Ψ', 'Ω'
 ];
-const LABEL_SYMBOL_DEFINITIONS = [
-    { symbol: '⟂', title: 'Prostopadłe' },
-    { symbol: '∥', title: 'Równoległe' },
-    { symbol: '∦', title: 'Nie równoległe (∦)' },
-    { symbol: '∈', title: 'Należy' },
-    { symbol: '∩', title: 'Część wspólna' },
-    { symbol: '∪', title: 'Unia (∪)' },
-    { symbol: '△', title: 'Trójkąt' },
-    { symbol: '∼', title: 'Podobieństwo (∼)' },
-    { symbol: '∢', title: 'Kąt (∢)' },
-    { symbol: '⇒', title: 'Implikacja w prawo (⇒)' },
-    { symbol: '⇐', title: 'Implikacja w lewo (⇐)' },
-    { symbol: '⇔', title: 'Równoważność (⇔)' },
-    { symbol: '°', title: 'Stopień (°)' }
+const LABEL_SYMBOLS = [
+    '⟂', '∥', '∦', '∈', '∩', '∪', '△', '∼', '∢', '⇐', '⇒', '⇔', '°'
 ];
 // Symbol buttons that should not be replaced by script mode
 // Added arrow symbols for label keypad: left, right, and double arrow
@@ -5204,15 +5192,15 @@ function initLabelKeypad() {
         container.appendChild(btn);
     }
     // Symbols
-    for (const def of LABEL_SYMBOL_DEFINITIONS) {
+    for (const sym of LABEL_SYMBOLS) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'tool icon-btn label-greek-btn label-symbol-btn';
-        btn.title = def.title;
-        btn.dataset.letter = def.symbol;
-        btn.dataset.letterLower = def.symbol;
-        btn.dataset.letterUpper = def.symbol;
-        btn.textContent = def.symbol;
+        btn.title = sym;
+        btn.dataset.letter = sym;
+        btn.dataset.letterLower = sym;
+        btn.dataset.letterUpper = sym;
+        btn.textContent = sym;
         container.appendChild(btn);
     }
 }
