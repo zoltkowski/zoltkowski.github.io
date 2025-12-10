@@ -229,3 +229,6 @@ input[type="color"] { background: transparent; border: 1px solid #374151; paddin
   .appearance-config { grid-template-columns: 1fr; }
 }
 
+/* Force eraser button icon to appear bright in dark theme */
+#eraserBtn { color: #ffffff !important; }
+
