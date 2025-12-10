@@ -2295,39 +2295,68 @@ function setMode(next: Mode) {
             }
           });
         }
-        // Label polygon vertices if selected or if no segments selected
-        if (shouldLabelVertices && !polygonHasLabels(selectedPolygonIndex)) {
+        
+        // Label polygon vertices - always label if not all vertices have labels
+        if (!polygonHasLabels(selectedPolygonIndex)) {
         // Label all vertices
         const verts = polygonVerticesOrdered(selectedPolygonIndex);
         
-        // Check if any vertex already has a label with subscript pattern (e.g., "P_1", "A_12")
+        // Check if any vertex already has a label
         let baseLabel: string | null = null;
         let startIndex = 1;
         let labeledVertexPosition = -1;
+        let isLetterPattern = false;
         
         for (let i = 0; i < verts.length; i++) {
           const vi = verts[i];
           const existingLabel = model.points[vi]?.label?.text;
           if (existingLabel) {
             // Check for pattern: "base_number" (e.g., "P_1", "A_12")
-            const match = existingLabel.match(/^(.+?)_(\d+)$/);
-            if (match) {
-              baseLabel = match[1];
-              startIndex = parseInt(match[2], 10);
+            const subscriptMatch = existingLabel.match(/^(.+?)_(\d+)$/);
+            if (subscriptMatch) {
+              baseLabel = subscriptMatch[1];
+              startIndex = parseInt(subscriptMatch[2], 10);
               labeledVertexPosition = i;
+              isLetterPattern = false;
               break;
+            }
+            // Check for single uppercase letter pattern (e.g., "A", "B", "C")
+            else if (existingLabel.length === 1) {
+              const upperIdx = UPPER_SEQ.indexOf(existingLabel);
+              if (upperIdx >= 0) {
+                startIndex = upperIdx;
+                labeledVertexPosition = i;
+                isLetterPattern = true;
+                break;
+              }
             }
           }
         }
         
-        if (baseLabel && labeledVertexPosition >= 0) {
-          // Use the pattern found, numbering in reverse direction from the labeled vertex
+        if (isLetterPattern && labeledVertexPosition >= 0) {
+          // Use letter sequence pattern (UPPER_SEQ)
           verts.forEach((vi, i) => {
             if (!model.points[vi].label) {
-              // Calculate index: if we're at position i and labeled vertex is at labeledVertexPosition,
-              // count backwards: (labeledVertexPosition - i + verts.length) % verts.length
+              const offset = (i - labeledVertexPosition + verts.length) % verts.length;
+              const letterIdx = (startIndex + offset) % UPPER_SEQ.length;
+              const text = UPPER_SEQ[letterIdx];
+              model.points[vi].label = {
+                text,
+                color,
+                offset: defaultPointLabelOffset(vi),
+                fontSize: getLabelFontDefault(),
+                seq: undefined // Custom label, no sequence
+              };
+            }
+          });
+          changed = true;
+        } else if (baseLabel && labeledVertexPosition >= 0) {
+          // Use the subscript pattern found, numbering in reverse direction from the labeled vertex
+          verts.forEach((vi, i) => {
+            if (!model.points[vi].label) {
               const offset = (labeledVertexPosition - i + verts.length) % verts.length;
-              const text = `${baseLabel}_${startIndex + offset}`;
+              const index = ((startIndex - 1 + offset) % verts.length) + 1;
+              const text = `${baseLabel}_${index}`;
               model.points[vi].label = {
                 text,
                 color,
@@ -3350,65 +3379,23 @@ function handleCanvasClick(ev: PointerEvent) {
       }
     }
     // Click on polygon
-    else if (polyHit !== null && selectedPolygonIndex === polyHit) {
+    else if (polyHit !== null) {
       selectedPolygonIndex = polyHit;
       if (!polygonHasLabels(polyHit)) {
         const verts = polygonVerticesOrdered(polyHit);
-        
-        // Check if any vertex already has a label with subscript pattern (e.g., "P_1", "A_12")
-        let baseLabel: string | null = null;
-        let startIndex = 1;
-        let labeledVertexPosition = -1;
-        
-        for (let i = 0; i < verts.length; i++) {
-          const vi = verts[i];
-          const existingLabel = model.points[vi]?.label?.text;
-          if (existingLabel) {
-            // Check for pattern: "base_number" (e.g., "P_1", "A_12")
-            const match = existingLabel.match(/^(.+?)_(\d+)$/);
-            if (match) {
-              baseLabel = match[1];
-              startIndex = parseInt(match[2], 10);
-              labeledVertexPosition = i;
-              break;
-            }
-          }
-        }
-        
-        if (baseLabel && labeledVertexPosition >= 0) {
-          // Use the pattern found, numbering in reverse direction from the labeled vertex
-          verts.forEach((vi, i) => {
-            if (!model.points[vi].label) {
-              // Calculate index: if we're at position i and labeled vertex is at labeledVertexPosition,
-              // count backwards: (labeledVertexPosition - i + verts.length) % verts.length
-              const offset = (labeledVertexPosition - i + verts.length) % verts.length;
-              const text = `${baseLabel}_${startIndex + offset}`;
-              model.points[vi].label = {
-                text,
-                color,
-                offset: defaultPointLabelOffset(vi),
-                fontSize: getLabelFontDefault(),
-                seq: undefined // Custom label, no sequence
-              };
-            }
-          });
-          changed = true;
-        } else {
-          // Default behavior - use sequential uppercase letters
-          verts.forEach((vi, i) => {
-            const idx = labelUpperIdx + i;
-            const text = seqLetter(idx, UPPER_SEQ);
-            model.points[vi].label = {
-              text,
-              color,
-              offset: defaultPointLabelOffset(vi),
-              fontSize: getLabelFontDefault(),
-              seq: { kind: 'upper' as const, idx }
-            };
-          });
-          labelUpperIdx += verts.length;
-          changed = verts.length > 0;
-        }
+        verts.forEach((vi, i) => {
+          const idx = labelUpperIdx + i;
+          const text = seqLetter(idx, UPPER_SEQ);
+          model.points[vi].label = {
+            text,
+            color,
+            offset: defaultPointLabelOffset(vi),
+            fontSize: getLabelFontDefault(),
+            seq: { kind: 'upper' as const, idx }
+          };
+        });
+        labelUpperIdx += verts.length;
+        changed = verts.length > 0;
         if (changed) {
           clearLabelSelection();
           setMode('move');
