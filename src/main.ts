@@ -1942,9 +1942,6 @@ function draw() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.setTransform(dpr * zoomFactor, 0, 0, dpr * zoomFactor, panOffset.x * dpr, panOffset.y * dpr);
 
-  // Helper function to check if a point should hide edges when hidden
-  const pointHiddenForEdges = isPointHiddenForEdges;
-
   // draw lines
   model.lines.forEach((line, lineIdx) => {
     if (line.hidden && !showHidden) return;
@@ -1961,9 +1958,7 @@ function draw() {
       if (style.hidden && !showHidden) {
         continue;
       }
-      if (!showHidden && (pointHiddenForEdges(line.points[i]) || pointHiddenForEdges(line.points[i + 1]))) {
-        continue;
-      }
+      // Removed check for hidden endpoints - lines should remain visible even if points are hidden
       const segKey = segmentKey(lineIdx, 'segment', i);
       const isSegmentSelected = selectedSegments.size > 0 && selectedSegments.has(segKey);
       const shouldHighlight =
@@ -9568,21 +9563,6 @@ type LineHit =
   | { line: number; part: 'rayRight' };
 type CircleHit = { circle: number };
 
-// Helper function to check if a hidden point should hide the edges it's on
-function isPointHiddenForEdges(idx: number): boolean {
-  const pt = model.points[idx];
-  if (!pt) return false;
-  if (!pt.style.hidden) return false;
-  if (pt.parallel_helper_for) return false;
-  if (pt.perpendicular_helper_for) return false;
-  return (
-    pt.construction_kind !== 'intersection' &&
-    pt.construction_kind !== 'midpoint' &&
-    pt.construction_kind !== 'symmetric' &&
-    pt.construction_kind !== 'on_object'
-  );
-}
-
 function findLineHits(p: { x: number; y: number }): LineHit[] {
   const hits: LineHit[] = [];
   const tol = currentHitRadius();
@@ -9596,7 +9576,7 @@ function findLineHits(p: { x: number; y: number }): LineHit[] {
         const style = line.segmentStyles?.[s] ?? line.style;
         if (!a || !b) continue;
         if (style.hidden && !showHidden) continue;
-        if (!showHidden && (isPointHiddenForEdges(line.points[s]) || isPointHiddenForEdges(line.points[s + 1]))) continue;
+        // Removed check for hidden endpoints
         if (pointToSegmentDistance(p, a, b) <= tol) {
           hits.push({ line: i, part: 'segment', seg: s });
           break;
