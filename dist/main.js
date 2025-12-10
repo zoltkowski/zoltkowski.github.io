@@ -2,20 +2,20 @@ const LINE_SNAP_SIN_ANGLE = Math.sin((5 * Math.PI) / 180);
 const LINE_SNAP_BLEND_STRENGTH = 0.25;
 const LINE_SNAP_FULL_THRESHOLD = 0.9;
 const LINE_SNAP_INDICATOR_THRESHOLD = LINE_SNAP_FULL_THRESHOLD;
-const ANGLE_RADIUS_STEP = 8;
+const ANGLE_RADIUS_STEP = 1;
 const ANGLE_DEFAULT_RADIUS = 28;
-const ANGLE_MIN_RADIUS = 10;
+const ANGLE_MIN_RADIUS = 1;
 const ANGLE_RADIUS_MARGIN = 6;
 const ANGLE_RADIUS_EPSILON = 0.5;
-const RIGHT_ANGLE_MARK_MIN = 14;
+const RIGHT_ANGLE_MARK_MIN = 4;
 const RIGHT_ANGLE_MARK_RATIO = 0.65;
-const RIGHT_ANGLE_MARK_MAX = 72;
+const RIGHT_ANGLE_MARK_MAX = 200;
 const RIGHT_ANGLE_MARK_MARGIN = 4;
 const LABEL_FONT_DEFAULT = 12;
 const getLabelFontDefault = () => THEME.fontSize || LABEL_FONT_DEFAULT;
-const LABEL_FONT_MIN = 8;
-const LABEL_FONT_MAX = 48;
-const LABEL_FONT_STEP = 2;
+const LABEL_FONT_MIN = 4;
+const LABEL_FONT_MAX = 100;
+const LABEL_FONT_STEP = 1;
 const TICK_LENGTH_UNITS = 12;
 const TICK_SPACING_UNITS = 8;
 const TICK_MARGIN_UNITS = 4;
@@ -5026,35 +5026,45 @@ function initAppearanceTab() {
             const current = { ...base, ...overrides };
             const delta = action === 'increase' ? 1 : -1;
             if (target === 'lineWidth') {
-                const newValue = Math.max(1, Math.min(10, (current.lineWidth || base.lineWidth) + delta));
+                const step = 0.1;
+                const val = (current.lineWidth || base.lineWidth) + delta * step;
+                const newValue = Math.max(0.1, Math.min(50, Math.round(val * 10) / 10));
                 saveThemeValue('lineWidth', newValue);
                 saveThemeValue('angleStrokeWidth', newValue);
                 if (themeLineWidthValue)
                     themeLineWidthValue.textContent = `${newValue} px`;
             }
             else if (target === 'pointSize') {
-                const newValue = Math.max(1, Math.min(10, (current.pointSize || base.pointSize) + delta));
+                const step = 0.1;
+                const val = (current.pointSize || base.pointSize) + delta * step;
+                const newValue = Math.max(0.1, Math.min(50, Math.round(val * 10) / 10));
                 saveThemeValue('pointSize', newValue);
                 if (themePointSizeValue)
                     themePointSizeValue.textContent = `${newValue} px`;
             }
             else if (target === 'arcRadius') {
-                const newValue = Math.max(16, Math.min(48, (current.angleDefaultRadius || base.angleDefaultRadius) + delta * 2));
+                const step = 1;
+                const val = (current.angleDefaultRadius || base.angleDefaultRadius) + delta * step;
+                const newValue = Math.max(1, Math.min(200, val));
                 saveThemeValue('angleDefaultRadius', newValue);
                 if (themeArcRadiusValue)
                     themeArcRadiusValue.textContent = `${newValue} px`;
             }
             else if (target === 'fontSize') {
-                const newValue = Math.max(8, Math.min(24, (current.fontSize || base.fontSize) + delta));
+                const step = 1;
+                const val = (current.fontSize || base.fontSize) + delta * step;
+                const newValue = Math.max(4, Math.min(100, val));
                 saveThemeValue('fontSize', newValue);
                 if (themeFontSizeValue)
                     themeFontSizeValue.textContent = `${newValue} px`;
             }
             else if (target === 'highlightWidth') {
-                const newValue = Math.max(1, Math.min(5, (current.highlightWidth || base.highlightWidth) + delta * 0.5));
+                const step = 0.1;
+                const val = (current.highlightWidth || base.highlightWidth) + delta * step;
+                const newValue = Math.max(0.1, Math.min(20, Math.round(val * 10) / 10));
                 saveThemeValue('highlightWidth', newValue);
                 if (themeHighlightWidthValue)
-                    themeHighlightWidthValue.textContent = `${newValue.toFixed(1)} px`;
+                    themeHighlightWidthValue.textContent = `${newValue} px`;
             }
         });
     });
@@ -7985,8 +7995,8 @@ function angleBaseGeometry(ang) {
     const legLen1 = Math.hypot(p1.x - v.x, p1.y - v.y);
     const legLen2 = Math.hypot(p2.x - v.x, p2.y - v.y);
     const legLimit = Math.max(4, Math.min(legLen1, legLen2) - ANGLE_RADIUS_MARGIN);
-    const maxRadius = Math.max(4, legLimit);
-    const minRadius = Math.max(4, Math.min(maxRadius, ANGLE_MIN_RADIUS));
+    const maxRadius = Math.max(500, legLimit);
+    const minRadius = ANGLE_MIN_RADIUS;
     let radius = Math.min(ANGLE_DEFAULT_RADIUS, maxRadius);
     radius = clamp(radius, minRadius, maxRadius);
     return { v, p1, p2, start, end, span: ccw, clockwise, radius, minRadius, maxRadius };
@@ -9278,10 +9288,10 @@ function adjustSelectedLabelFont(delta) {
 function updateLineWidthControls() {
     if (!styleWidthInput)
         return;
-    const min = Number(styleWidthInput.min) || 1;
-    const max = Number(styleWidthInput.max) || 10;
+    const min = Number(styleWidthInput.min) || 0.1;
+    const max = Number(styleWidthInput.max) || 50;
     const raw = Number(styleWidthInput.value);
-    const current = clamp(Number.isFinite(raw) ? Math.round(raw) : min, min, max);
+    const current = clamp(Number.isFinite(raw) ? Math.round(raw * 10) / 10 : min, min, max);
     if (styleWidthInput.value !== String(current))
         styleWidthInput.value = String(current);
     const disabled = styleWidthInput.disabled;
@@ -9311,11 +9321,12 @@ function adjustLineWidth(delta) {
         updateLineWidthControls();
         return;
     }
-    const min = Number(styleWidthInput.min) || 1;
-    const max = Number(styleWidthInput.max) || 10;
+    const min = Number(styleWidthInput.min) || 0.1;
+    const max = Number(styleWidthInput.max) || 50;
     const current = Number(styleWidthInput.value) || min;
-    const next = clamp(Math.round(current) + delta, min, max);
-    if (next === Math.round(current)) {
+    const step = 0.1;
+    const next = clamp(Math.round((current + delta * step) * 10) / 10, min, max);
+    if (next === current) {
         updateLineWidthControls();
         return;
     }
