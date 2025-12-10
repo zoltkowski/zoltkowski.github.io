@@ -1583,7 +1583,7 @@ function draw() {
         if (radius <= 1e-3)
             return;
         const style = circle.style;
-        const selected = selectedCircleIndex === idx;
+        const selected = selectedCircleIndex === idx && selectionEdges;
         ctx.save();
         ctx.globalAlpha = circle.hidden && showHidden ? 0.4 : 1;
         ctx.strokeStyle = style.color;
@@ -1795,7 +1795,10 @@ function draw() {
         if ((highlightPoint ||
             hoverPoint ||
             (selectedLineIndex !== null && selectionVertices && pointInLine(idx, model.lines[selectedLineIndex])) ||
-            (selectedPolygonIndex !== null && selectionVertices && polygonHasPoint(idx, model.polygons[selectedPolygonIndex]))) &&
+            (selectedPolygonIndex !== null && selectionVertices && polygonHasPoint(idx, model.polygons[selectedPolygonIndex])) ||
+            (selectedCircleIndex !== null && selectionVertices && (circleHasDefiningPoint(model.circles[selectedCircleIndex], idx) ||
+                (model.circles[selectedCircleIndex].circle_kind === 'center-radius' &&
+                    (model.circles[selectedCircleIndex].center === idx || model.circles[selectedCircleIndex].radius_point === idx))))) &&
             (!p.style.hidden || showHidden)) {
             ctx.save();
             ctx.translate(p.x, p.y);
@@ -7237,6 +7240,8 @@ function initRuntime() {
     viewModeToggleBtn?.addEventListener('click', toggleViewMenu);
     document.getElementById('viewEdgesOption')?.addEventListener('click', () => setViewMode('edges'));
     document.getElementById('viewVerticesOption')?.addEventListener('click', () => setViewMode('vertices'));
+    document.getElementById('viewCircleLineOption')?.addEventListener('click', () => setViewMode('edges'));
+    document.getElementById('viewCirclePointsOption')?.addEventListener('click', () => setViewMode('vertices'));
     rayModeToggleBtn?.addEventListener('click', toggleRayMenu);
     document.getElementById('rayRightOption')?.addEventListener('click', () => setRayMode('right'));
     document.getElementById('rayLeftOption')?.addEventListener('click', () => setRayMode('left'));
@@ -7487,7 +7492,28 @@ function initRuntime() {
             model.lines[selectedLineIndex].hidden = !model.lines[selectedLineIndex].hidden;
         }
         else if (selectedCircleIndex !== null) {
-            model.circles[selectedCircleIndex].hidden = !model.circles[selectedCircleIndex].hidden;
+            if (selectionEdges) {
+                model.circles[selectedCircleIndex].hidden = !model.circles[selectedCircleIndex].hidden;
+            }
+            if (selectionVertices) {
+                const circle = model.circles[selectedCircleIndex];
+                const pointsToToggle = new Set();
+                if (circle.center !== null)
+                    pointsToToggle.add(circle.center);
+                if (circle.radius_point !== null)
+                    pointsToToggle.add(circle.radius_point);
+                // Also toggle defining parents if they are points
+                circle.defining_parents.forEach(pid => {
+                    const idx = model.points.findIndex(p => p.id === pid);
+                    if (idx !== -1)
+                        pointsToToggle.add(idx);
+                });
+                pointsToToggle.forEach(idx => {
+                    const p = model.points[idx];
+                    if (p)
+                        model.points[idx] = { ...p, style: { ...p.style, hidden: !p.style.hidden } };
+                });
+            }
         }
         else if (selectedAngleIndex !== null) {
             const angle = model.angles[selectedAngleIndex];
@@ -8119,55 +8145,41 @@ function initRuntime() {
         else if (selectedCircleIndex !== null) {
             const circle = model.circles[selectedCircleIndex];
             if (circle) {
-                if (circle.label)
-                    reclaimLabel(circle.label);
-                const circleId = circle.id;
-                // Collect points to remove - only those that were created for this circle
-                // and are not used elsewhere as defining points of other objects
-                const toRemove = new Set();
-                // Check center point - only remove if not used as defining point for lines
-                const centerUsedInLines = model.lines.some(line => line.defining_points.includes(circle.center));
-                if (!centerUsedInLines) {
-                    toRemove.add(circle.center);
+                if (selectionVertices) {
+                    const pointsToDelete = new Set();
+                    if (circle.center !== null)
+                        pointsToDelete.add(circle.center);
+                    if (circle.radius_point !== null)
+                        pointsToDelete.add(circle.radius_point);
+                    circle.defining_parents.forEach(pid => {
+                        const idx = model.points.findIndex(p => p.id === pid);
+                        if (idx !== -1)
+                            pointsToDelete.add(idx);
+                    });
+                    removePointsAndRelated(Array.from(pointsToDelete), true);
                 }
-                // Check other points on circle
-                const constrainedPoints = [circle.radius_point, ...circle.points];
-                constrainedPoints.forEach((pid) => {
-                    if (circleHasDefiningPoint(circle, pid))
-                        return;
-                    const point = model.points[pid];
-                    if (!point)
-                        return;
-                    const hasCircleParent = point.parent_refs.some((pr) => pr.kind === 'circle' && pr.id === circleId);
-                    // Only remove if not used as defining point for lines
-                    const usedInLines = model.lines.some(line => line.defining_points.includes(pid));
-                    if (!usedInLines && (!isCircleThroughPoints(circle) || hasCircleParent)) {
-                        toRemove.add(pid);
+                else {
+                    if (circle.label)
+                        reclaimLabel(circle.label);
+                    const circleId = circle.id;
+                    const idx = model.indexById.circle[circleId];
+                    if (idx !== undefined) {
+                        model.circles.splice(idx, 1);
                     }
-                });
-                // Remove circle from parent_refs of points that are not being deleted
-                model.points = model.points.map((pt, idx) => {
-                    if (toRemove.has(idx))
+                    model.points = model.points.map((pt) => {
+                        const before = pt.parent_refs || [];
+                        const afterRefs = before.filter((pr) => !(pr.kind === 'circle' && pr.id === circleId));
+                        if (afterRefs.length !== before.length) {
+                            const newKind = resolveConstructionKind(afterRefs);
+                            return {
+                                ...pt,
+                                parent_refs: afterRefs,
+                                defining_parents: afterRefs.map((p) => p.id),
+                                construction_kind: newKind
+                            };
+                        }
                         return pt;
-                    const before = pt.parent_refs || [];
-                    const afterRefs = before.filter((pr) => !(pr.kind === 'circle' && pr.id === circleId));
-                    if (afterRefs.length !== before.length) {
-                        const newKind = resolveConstructionKind(afterRefs);
-                        return {
-                            ...pt,
-                            parent_refs: afterRefs,
-                            defining_parents: afterRefs.map((p) => p.id),
-                            construction_kind: newKind
-                        };
-                    }
-                    return pt;
-                });
-                if (toRemove.size > 0) {
-                    removePointsAndRelated(Array.from(toRemove), true);
-                }
-                const idx = model.indexById.circle[circleId];
-                if (idx !== undefined) {
-                    model.circles.splice(idx, 1);
+                    });
                 }
             }
             selectedCircleIndex = null;
@@ -10834,6 +10846,8 @@ function updateStyleMenuValues() {
     setRowVisible(styleArcRow, selectedAngleIndex !== null && !labelEditing);
     setRowVisible(styleHideRow, !labelEditing);
     setRowVisible(styleEdgesRow, isLineLike && !labelEditing);
+    const styleCircleRow = document.getElementById('styleCircleRow');
+    setRowVisible(styleCircleRow, selectedCircleIndex !== null && !labelEditing);
     setRowVisible(styleColorRow, true);
     setRowVisible(styleWidthRow, !labelEditing);
     // Show/hide exterior angle button
@@ -10853,6 +10867,15 @@ function updateStyleMenuValues() {
         const edgesActive = mode === 'edges' || mode === 'both';
         viewVerticesBtn.classList.toggle('active', verticesActive);
         viewEdgesBtn.classList.toggle('active', edgesActive);
+    }
+    const viewCirclePointsBtn = document.getElementById('viewCirclePointsOption');
+    const viewCircleLineBtn = document.getElementById('viewCircleLineOption');
+    if (viewCirclePointsBtn && viewCircleLineBtn) {
+        const mode = getViewModeState();
+        const verticesActive = mode === 'vertices' || mode === 'both';
+        const edgesActive = mode === 'edges' || mode === 'both';
+        viewCirclePointsBtn.classList.toggle('active', verticesActive);
+        viewCircleLineBtn.classList.toggle('active', edgesActive);
     }
     if (selectedLineIndex !== null && raySegmentBtn && rayLeftBtn && rayRightBtn) {
         const line = model.lines[selectedLineIndex];
@@ -12289,6 +12312,7 @@ function setViewMode(mode) {
             selectionEdges = true;
     }
     updateSelectionButtons();
+    updateStyleMenuValues();
     draw();
     closeViewMenu();
 }
