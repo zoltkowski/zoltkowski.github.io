@@ -861,7 +861,7 @@ let lineWidthDecreaseBtn: HTMLButtonElement | null = null;
 let lineWidthIncreaseBtn: HTMLButtonElement | null = null;
 let lineWidthValueDisplay: HTMLElement | null = null;
 let styleTypeSelect: HTMLSelectElement | null = null;
-let labelTextInput: HTMLInputElement | null = null;
+let labelTextInput: HTMLTextAreaElement | null = null;
 let arcCountButtons: HTMLButtonElement[] = [];
 let rightAngleBtn: HTMLButtonElement | null = null;
 let exteriorAngleBtn: HTMLButtonElement | null = null;
@@ -6739,7 +6739,7 @@ function initRuntime() {
   lineWidthIncreaseBtn = document.getElementById('lineWidthIncrease') as HTMLButtonElement | null;
   lineWidthValueDisplay = document.getElementById('lineWidthValue');
   styleTypeSelect = document.getElementById('styleType') as HTMLSelectElement | null;
-  labelTextInput = document.getElementById('labelText') as HTMLInputElement | null;
+  labelTextInput = document.getElementById('labelText') as HTMLTextAreaElement | null;
   labelFontDecreaseBtn = document.getElementById('labelFontDecrease') as HTMLButtonElement | null;
   labelFontIncreaseBtn = document.getElementById('labelFontIncrease') as HTMLButtonElement | null;
   labelFontSizeDisplay = document.getElementById('labelFontSizeValue');
@@ -9923,24 +9923,44 @@ function getAngleLabelPos(idx: number): { x: number; y: number } | null {
   return { x: geom.v.x + offWorld.x, y: geom.v.y + offWorld.y };
 }
 
+function isPointInLabelBox(pScreen: {x: number, y: number}, labelPosWorld: {x: number, y: number}, label: Pick<Label, 'text' | 'fontSize'>) {
+  const posScreen = worldToCanvas(labelPosWorld.x, labelPosWorld.y);
+  const dim = getLabelScreenDimensions(label);
+  const padX = 6;
+  const padY = 4;
+  const halfW = dim.width / 2 + padX;
+  const halfH = dim.height / 2 + padY;
+  
+  return (
+    pScreen.x >= posScreen.x - halfW &&
+    pScreen.x <= posScreen.x + halfW &&
+    pScreen.y >= posScreen.y - halfH &&
+    pScreen.y <= posScreen.y + halfH
+  );
+}
+
 function findLabelAt(p: { x: number; y: number }): { kind: 'point' | 'line' | 'angle' | 'free'; id: number } | null {
-  const tolerance = currentLabelHitRadius();
+  const pScreen = worldToCanvas(p.x, p.y);
+  
   for (let i = model.angles.length - 1; i >= 0; i--) {
     const pos = getAngleLabelPos(i);
-    if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= tolerance) return { kind: 'angle', id: i };
+    const label = model.angles[i].label;
+    if (pos && label && isPointInLabelBox(pScreen, pos, label)) return { kind: 'angle', id: i };
   }
   for (let i = model.lines.length - 1; i >= 0; i--) {
     const pos = getLineLabelPos(i);
-    if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= tolerance) return { kind: 'line', id: i };
+    const label = model.lines[i].label;
+    if (pos && label && isPointInLabelBox(pScreen, pos, label)) return { kind: 'line', id: i };
   }
   for (let i = model.points.length - 1; i >= 0; i--) {
     const pos = getPointLabelPos(i);
-    if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= tolerance) return { kind: 'point', id: i };
+    const label = model.points[i].label;
+    if (pos && label && isPointInLabelBox(pScreen, pos, label)) return { kind: 'point', id: i };
   }
   for (let i = model.labels.length - 1; i >= 0; i--) {
     const lab = model.labels[i];
     if (lab.hidden && !showHidden) continue;
-    if (Math.hypot(lab.pos.x - p.x, lab.pos.y - p.y) <= tolerance) return { kind: 'free', id: i };
+    if (isPointInLabelBox(pScreen, lab.pos, lab)) return { kind: 'free', id: i };
   }
   return null;
 }
@@ -10652,6 +10672,37 @@ function defaultAngleLabelOffset(angleIdx: number): { x: number; y: number } {
   return worldOffsetToScreen({ x: dir.x * radius, y: dir.y * radius });
 }
 
+function getLabelScreenDimensions(label: Pick<Label, 'text' | 'fontSize'>) {
+  if (!ctx) return { width: 0, height: 0, lines: [], lineWidths: [], lineHeight: 0 };
+  
+  const fontSize = normalizeLabelFontSize(label.fontSize);
+  ctx.save();
+  ctx.font = `${fontSize}px sans-serif`;
+  
+  // Trim trailing newlines
+  let text = label.text;
+  while (text.endsWith('\n')) {
+    text = text.slice(0, -1);
+  }
+  
+  const lines = text.split('\n');
+  const lineHeight = fontSize * 1.2;
+  let maxWidth = 0;
+  const lineWidths: number[] = [];
+  
+  lines.forEach(line => {
+    const w = measureFormattedText(ctx!, line);
+    lineWidths.push(w);
+    if (w > maxWidth) maxWidth = w;
+  });
+  
+  const totalHeight = lines.length * lineHeight;
+  
+  ctx.restore();
+  
+  return { width: maxWidth, height: totalHeight, lines, lineWidths, lineHeight };
+}
+
 function drawLabelText(
   label: Pick<Label, 'text' | 'color' | 'fontSize'>,
   anchor: { x: number; y: number },
@@ -10672,13 +10723,14 @@ function drawLabelText(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
-  const textWidth = measureFormattedText(ctx, label.text);
+  const { width: maxWidth, height: totalHeight, lines, lineWidths, lineHeight } = getLabelScreenDimensions(label);
+  const startY = -(totalHeight / 2) + (lineHeight / 2);
 
   if (selected) {
     const padX = 6;
     const padY = 4;
-    const w = textWidth + padX * 2;
-    const h = fontSize + padY * 2;
+    const w = maxWidth + padX * 2;
+    const h = totalHeight + padY * 2;
     ctx.fillStyle = 'rgba(251,191,36,0.18)'; // soft highlight
     ctx.strokeStyle = THEME.highlight;
     ctx.lineWidth = 1;
@@ -10699,7 +10751,13 @@ function drawLabelText(
     ctx.stroke();
   }
   ctx.fillStyle = label.color ?? '#000';
-  renderFormattedText(ctx, label.text, -textWidth / 2, 0);
+  
+  lines.forEach((line, i) => {
+    const w = lineWidths[i];
+    const y = startY + i * lineHeight;
+    renderFormattedText(ctx!, line, -w / 2, y);
+  });
+  
   ctx.restore();
 }
 

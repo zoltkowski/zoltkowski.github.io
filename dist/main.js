@@ -9137,28 +9137,43 @@ function getAngleLabelPos(idx) {
     const offWorld = screenOffsetToWorld(offScreen);
     return { x: geom.v.x + offWorld.x, y: geom.v.y + offWorld.y };
 }
+function isPointInLabelBox(pScreen, labelPosWorld, label) {
+    const posScreen = worldToCanvas(labelPosWorld.x, labelPosWorld.y);
+    const dim = getLabelScreenDimensions(label);
+    const padX = 6;
+    const padY = 4;
+    const halfW = dim.width / 2 + padX;
+    const halfH = dim.height / 2 + padY;
+    return (pScreen.x >= posScreen.x - halfW &&
+        pScreen.x <= posScreen.x + halfW &&
+        pScreen.y >= posScreen.y - halfH &&
+        pScreen.y <= posScreen.y + halfH);
+}
 function findLabelAt(p) {
-    const tolerance = currentLabelHitRadius();
+    const pScreen = worldToCanvas(p.x, p.y);
     for (let i = model.angles.length - 1; i >= 0; i--) {
         const pos = getAngleLabelPos(i);
-        if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= tolerance)
+        const label = model.angles[i].label;
+        if (pos && label && isPointInLabelBox(pScreen, pos, label))
             return { kind: 'angle', id: i };
     }
     for (let i = model.lines.length - 1; i >= 0; i--) {
         const pos = getLineLabelPos(i);
-        if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= tolerance)
+        const label = model.lines[i].label;
+        if (pos && label && isPointInLabelBox(pScreen, pos, label))
             return { kind: 'line', id: i };
     }
     for (let i = model.points.length - 1; i >= 0; i--) {
         const pos = getPointLabelPos(i);
-        if (pos && Math.hypot(pos.x - p.x, pos.y - p.y) <= tolerance)
+        const label = model.points[i].label;
+        if (pos && label && isPointInLabelBox(pScreen, pos, label))
             return { kind: 'point', id: i };
     }
     for (let i = model.labels.length - 1; i >= 0; i--) {
         const lab = model.labels[i];
         if (lab.hidden && !showHidden)
             continue;
-        if (Math.hypot(lab.pos.x - p.x, lab.pos.y - p.y) <= tolerance)
+        if (isPointInLabelBox(pScreen, lab.pos, lab))
             return { kind: 'free', id: i };
     }
     return null;
@@ -9833,6 +9848,31 @@ function defaultAngleLabelOffset(angleIdx) {
     const radius = Math.max(geom.radius * 0.65, 12);
     return worldOffsetToScreen({ x: dir.x * radius, y: dir.y * radius });
 }
+function getLabelScreenDimensions(label) {
+    if (!ctx)
+        return { width: 0, height: 0, lines: [], lineWidths: [], lineHeight: 0 };
+    const fontSize = normalizeLabelFontSize(label.fontSize);
+    ctx.save();
+    ctx.font = `${fontSize}px sans-serif`;
+    // Trim trailing newlines
+    let text = label.text;
+    while (text.endsWith('\n')) {
+        text = text.slice(0, -1);
+    }
+    const lines = text.split('\n');
+    const lineHeight = fontSize * 1.2;
+    let maxWidth = 0;
+    const lineWidths = [];
+    lines.forEach(line => {
+        const w = measureFormattedText(ctx, line);
+        lineWidths.push(w);
+        if (w > maxWidth)
+            maxWidth = w;
+    });
+    const totalHeight = lines.length * lineHeight;
+    ctx.restore();
+    return { width: maxWidth, height: totalHeight, lines, lineWidths, lineHeight };
+}
 function drawLabelText(label, anchor, selected = false, screenOffset) {
     if (!ctx)
         return;
@@ -9848,12 +9888,13 @@ function drawLabelText(label, anchor, selected = false, screenOffset) {
     ctx.font = `${fontSize}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const textWidth = measureFormattedText(ctx, label.text);
+    const { width: maxWidth, height: totalHeight, lines, lineWidths, lineHeight } = getLabelScreenDimensions(label);
+    const startY = -(totalHeight / 2) + (lineHeight / 2);
     if (selected) {
         const padX = 6;
         const padY = 4;
-        const w = textWidth + padX * 2;
-        const h = fontSize + padY * 2;
+        const w = maxWidth + padX * 2;
+        const h = totalHeight + padY * 2;
         ctx.fillStyle = 'rgba(251,191,36,0.18)'; // soft highlight
         ctx.strokeStyle = THEME.highlight;
         ctx.lineWidth = 1;
@@ -9874,7 +9915,11 @@ function drawLabelText(label, anchor, selected = false, screenOffset) {
         ctx.stroke();
     }
     ctx.fillStyle = label.color ?? '#000';
-    renderFormattedText(ctx, label.text, -textWidth / 2, 0);
+    lines.forEach((line, i) => {
+        const w = lineWidths[i];
+        const y = startY + i * lineHeight;
+        renderFormattedText(ctx, line, -w / 2, y);
+    });
     ctx.restore();
 }
 /**
