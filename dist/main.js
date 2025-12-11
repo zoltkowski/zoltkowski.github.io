@@ -5118,6 +5118,15 @@ function setupGroupDropZone(group) {
         }
     });
 }
+// Save current buttonConfig state directly to localStorage without reading from DOM
+function saveButtonConfigToStorage() {
+    try {
+        localStorage.setItem('geometryButtonConfig', JSON.stringify(buttonConfig));
+    }
+    catch (e) {
+        console.error('Failed to save button configuration:', e);
+    }
+}
 function saveButtonConfig() {
     const multiGroups = document.getElementById('multiGroups');
     const secondGroups = document.getElementById('secondGroups');
@@ -5167,12 +5176,7 @@ function saveButtonConfig() {
         });
     }
     // Save to localStorage
-    try {
-        localStorage.setItem('geometryButtonConfig', JSON.stringify(buttonConfig));
-    }
-    catch (e) {
-        console.error('Failed to save button configuration:', e);
-    }
+    saveButtonConfigToStorage();
 }
 function saveButtonOrder() {
     try {
@@ -5598,10 +5602,25 @@ function importButtonConfiguration(jsonString) {
         if (typeof config.defaultFolderName === 'string') {
             localStorage.setItem('defaultFolderName', config.defaultFolderName);
         }
-        // Save to localStorage
-        saveButtonConfig();
+        // Save to localStorage (use direct storage save to avoid reading from DOM)
+        saveButtonConfigToStorage();
+        saveButtonOrder();
         // Reload UI
         applyButtonConfiguration();
+        // Reinitialize button references and event listeners
+        reinitToolButtons();
+        // Always refresh button config UI (regardless of modal state)
+        // This ensures the UI reflects imported changes
+        initializeButtonConfig();
+        // Update precision inputs in settings UI
+        const precisionLengthInput = document.getElementById('precisionLength');
+        const precisionAngleInput = document.getElementById('precisionAngle');
+        if (precisionLengthInput)
+            precisionLengthInput.value = measurementPrecisionLength.toString();
+        if (precisionAngleInput)
+            precisionAngleInput.value = measurementPrecisionAngle.toString();
+        // Redraw to apply theme changes
+        draw();
         return true;
     }
     catch (e) {
@@ -6001,6 +6020,100 @@ function updateDefaultFolderDisplay() {
             }
         }
     }
+}
+// Show import feedback icon next to button
+function showImportFeedback(success) {
+    const btn = document.getElementById('importConfigBtn');
+    if (!btn)
+        return;
+    // Remove existing feedback
+    const existing = btn.querySelector('.import-feedback');
+    if (existing)
+        existing.remove();
+    // Create feedback icon
+    const feedback = document.createElement('span');
+    feedback.className = 'import-feedback';
+    feedback.style.cssText = 'margin-left: 8px; font-size: 16px; display: inline-block; animation: fadeIn 0.3s ease;';
+    feedback.textContent = success ? '✓' : '✗';
+    feedback.style.color = success ? '#4ade80' : '#f87171';
+    btn.appendChild(feedback);
+    // Remove after delay
+    setTimeout(() => {
+        feedback.style.transition = 'opacity 0.3s ease';
+        feedback.style.opacity = '0';
+        setTimeout(() => feedback.remove(), 300);
+    }, 2000);
+}
+// Reinitialize tool button references and event listeners after toolbar rebuild
+function reinitToolButtons() {
+    // Get fresh references to tool buttons
+    modeTangentBtn = document.getElementById('modeTangent');
+    modePerpBisectorBtn = document.getElementById('modePerpBisector');
+    modeAddBtn = document.getElementById('modeAdd');
+    modeSegmentBtn = document.getElementById('modeSegment');
+    modeParallelBtn = document.getElementById('modeParallel');
+    modePerpBtn = document.getElementById('modePerpendicular');
+    modeCircleThreeBtn = document.getElementById('modeCircleThree');
+    modeTriangleBtn = document.getElementById('modeTriangleUp');
+    modeSquareBtn = document.getElementById('modeSquare');
+    modePolygonBtn = document.getElementById('modePolygon');
+    modeHandwritingBtn = document.getElementById('modeHandwriting');
+    modeAngleBtn = document.getElementById('modeAngle');
+    modeBisectorBtn = document.getElementById('modeBisector');
+    modeMidpointBtn = document.getElementById('modeMidpoint');
+    modeSymmetricBtn = document.getElementById('modeSymmetric');
+    modeParallelLineBtn = document.getElementById('modeParallelLine');
+    modeNgonBtn = document.getElementById('modeNgon');
+    modeLabelBtn = document.getElementById('modeLabel');
+    modeMoveBtn = document.getElementById('modeMove');
+    modeMultiselectBtn = document.getElementById('modeMultiselect');
+    // Attach event listeners to tool buttons
+    modeAddBtn?.addEventListener('click', () => handleToolClick('add'));
+    modeAddBtn?.addEventListener('dblclick', (e) => { e.preventDefault(); handleToolSticky('add'); });
+    setupDoubleTapSticky(modeAddBtn, 'add');
+    modeSegmentBtn?.addEventListener('click', () => handleToolClick('segment'));
+    modeSegmentBtn?.addEventListener('dblclick', (e) => { e.preventDefault(); handleToolSticky('segment'); });
+    setupDoubleTapSticky(modeSegmentBtn, 'segment');
+    modeParallelBtn?.addEventListener('click', () => handleToolClick('parallel'));
+    modePerpBtn?.addEventListener('click', () => handleToolClick('perpendicular'));
+    modeCircleThreeBtn?.addEventListener('click', () => handleToolClick('circleThree'));
+    modeTriangleBtn?.addEventListener('click', () => handleToolClick('triangleUp'));
+    modeSquareBtn?.addEventListener('click', () => handleToolClick('square'));
+    modePolygonBtn?.addEventListener('click', () => handleToolClick('polygon'));
+    modeHandwritingBtn?.addEventListener('click', () => handleToolClick('handwriting'));
+    modeAngleBtn?.addEventListener('click', () => handleToolClick('angle'));
+    modeBisectorBtn?.addEventListener('click', () => handleToolClick('bisector'));
+    modeMidpointBtn?.addEventListener('click', () => handleToolClick('midpoint'));
+    modeSymmetricBtn?.addEventListener('click', () => handleToolClick('symmetric'));
+    modeParallelLineBtn?.addEventListener('click', () => handleToolClick('parallelLine'));
+    modeTangentBtn?.addEventListener('click', () => handleToolClick('tangent'));
+    modeTangentBtn?.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        handleToolSticky('tangent');
+    });
+    setupDoubleTapSticky(modeTangentBtn, 'tangent');
+    modePerpBisectorBtn?.addEventListener('click', () => handleToolClick('perpBisector'));
+    modePerpBisectorBtn?.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        handleToolSticky('perpBisector');
+    });
+    setupDoubleTapSticky(modePerpBisectorBtn, 'perpBisector');
+    modeNgonBtn?.addEventListener('click', () => handleToolClick('ngon'));
+    modeLabelBtn?.addEventListener('click', () => {
+        setMode('label');
+        updateToolButtons();
+    });
+    modeMoveBtn?.addEventListener('click', () => {
+        if (mode === 'move') {
+            isPanning = false;
+        }
+        else {
+            setMode('move');
+            updateToolButtons();
+            updateSelectionButtons();
+        }
+    });
+    modeMultiselectBtn?.addEventListener('click', () => handleToolClick('multiselect'));
 }
 function initRuntime() {
     canvas = document.getElementById('canvas');
@@ -7411,12 +7524,7 @@ function initRuntime() {
             const content = event.target?.result;
             if (content) {
                 const success = importButtonConfiguration(content);
-                if (success) {
-                    alert('Konfiguracja została zaimportowana pomyślnie!');
-                }
-                else {
-                    alert('Błąd podczas importowania konfiguracji. Sprawdź czy plik jest poprawny.');
-                }
+                showImportFeedback(success);
             }
         };
         reader.readAsText(file);
