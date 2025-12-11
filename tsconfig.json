@@ -1,8 +1,6 @@
 {
   // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
     "target": "es2020",
     "module": "esnext",
     "moduleResolution": "node",

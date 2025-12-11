@@ -1,17 +1,19 @@
 {
-  "name": "geometry",
+  "name": "constrivia",
   "version": "1.0.0",
-  "description": "Minimal canvas PWA for geometry sketching",
+  "description": "Minimal canvas PWA for constrivia",
   "private": true,
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "type": "module",
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
   }
 }
