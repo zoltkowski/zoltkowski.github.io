@@ -1,65 +1,66 @@
-const CACHE = 'geometry-cache-v2512113';
+const CACHE = 'constrivia-cache-v1';
 
+// Tu trzymasz tylko rzeczy, które NA PEWNO istnieją w dist/
 const PRECACHE_URLS = [
   '/',
   '/index.html',
-  '/styles.css',
+  '/style.css',
   '/manifest.webmanifest',
-  '/icon.svg',
-  '/dist/main.js'
+  '/icon.svg'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(() => self.skipWaiting())
+      .catch((err) => {
+        // Nie pozwalamy, żeby install się wywalił i uwalił cały SW
+        console.error('SW install error', err);
+      })
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE)
-          .map((key) => caches.delete(key))
+    caches.keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE)
+            .map((key) => caches.delete(key))
+        )
       )
-    ).then(() => self.clients.claim())
+      .then(() => self.clients.claim())
+      .catch((err) => {
+        console.error('SW activate error', err);
+      })
   );
 });
 
-// Allow the page to trigger immediate activation
-self.addEventListener('message', (event) => {
-  if (!event.data) return;
-  if (event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-});
-
 self.addEventListener('fetch', (event) => {
-  event.respondWith(handleRequest(event.request));
+  const req = event.request;
+
+  // Nie ruszamy POST/PUT itd.
+  if (req.method !== 'GET') {
+    return;
+  }
+
+  // 1) NAWIGACJA (czyli F5, wpisanie URL, kliknięcie linku)
+  // Strategia: network-first, fallback do cache tylko jak sieć padnie.
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req)
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // 2) Inne zasoby (JS, CSS, ikony) – cache-first z fallbackiem do sieci
+  event.respondWith(
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+      return fetch(req);
+    })
+  );
 });
-
-async function handleRequest(request) {
-  const url = new URL(request.url);
-
-  // Navigation fallback to index.html for SPA behavior
-  if (request.mode === 'navigate') {
-    const cachedIndex = await caches.match('/index.html');
-    if (cachedIndex) return cachedIndex;
-    return fetch(request);
-  }
-
-  if (url.pathname === '/favicon.ico' || url.pathname.endsWith('/favicon.ico')) {
-    const icon = await caches.match('/icon.svg');
-    if (icon) return icon;
-  }
-
-  const cached = await caches.match(request);
-  if (cached) return cached;
-  try {
-    const response = await fetch(request);
-    return response;
-  } catch (e) {
-    return new Response('Network error', { status: 408 });
-  }
-}
