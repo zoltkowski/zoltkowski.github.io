@@ -15148,3 +15148,11 @@ loadButtonOrder();
 loadButtonConfiguration();
 // applyButtonConfiguration() is called in initRuntime() after DOM is ready
 
+// Rejestracja service workera (wyłączona na localhost)
+if ('serviceWorker' in navigator && window.location.hostname !== 'localhost') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.error('SW registration failed:', err);
+    });
+  });
+}
