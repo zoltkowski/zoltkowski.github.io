@@ -4931,7 +4931,7 @@ const TOOL_BUTTONS = [
   { id: 'modeBisector', label: 'Dwusieczna', mode: 'bisector', icon: '<line x1="6" y1="18" x2="20" y2="18" /><line x1="6" y1="18" x2="14" y2="6" /><line x1="6" y1="18" x2="20" y2="10" />', viewBox: '0 0 24 24' },
   { id: 'modeMidpoint', label: 'Punkt środkowy', mode: 'midpoint', icon: '<circle cx="6" cy="12" r="1.5" class="icon-fill"/><circle cx="18" cy="12" r="1.5" class="icon-fill"/><circle cx="12" cy="12" r="2.5" class="icon-fill"/><circle cx="12" cy="12" r="1" fill="var(--bg)" stroke="none"/>', viewBox: '0 0 24 24' },
   { id: 'modeSymmetric', label: 'Symetria', mode: 'symmetric', icon: '<line x1="12" y1="4" x2="12" y2="20" /><circle cx="7.5" cy="10" r="1.7" class="icon-fill"/><circle cx="16.5" cy="14" r="1.7" class="icon-fill"/><path d="M7.5 10 16.5 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>', viewBox: '0 0 24 24' },
-  { id: 'modeTangent', label: 'Styczna', mode: 'tangent', icon: '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="18" cy="8" r="1.8" class="icon-fill"/><line x1="22" y1="4" x2="14" y2="12" stroke="currentColor" stroke-width="1.5"/>', viewBox: '0 0 24 24' },
+  { id: 'modeTangent', label: 'Styczna', mode: 'tangent', icon: '<circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.2"/><line x1="2" y1="17" x2="22" y2="17" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" transform="rotate(-25 12 12)"/>', viewBox: '0 0 24 24' },
   { id: 'modePerpBisector', label: 'Symetralna', mode: 'perpBisector', icon: '<circle cx="7" cy="12" r="2" class="icon-fill"/><circle cx="17" cy="12" r="2" class="icon-fill"/><circle cx="12" cy="12" r="2.5" class="icon-fill"/><circle cx="12" cy="12" r="1" fill="var(--bg)" stroke="none"/><line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" stroke-width="1.5"/>', viewBox: '0 0 24 24' },
   { id: 'modeHandwriting', label: 'Pismo ręczne', mode: 'handwriting', icon: '<path d="M5.5 18.5 4 20l1.5-.1L9 19l10.5-10.5a1.6 1.6 0 0 0 0-2.2L17.7 4a1.6 1.6 0 0 0-2.2 0L5 14.5l.5 4Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 5.5 18.5 8.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>', viewBox: '0 0 24 24' },
 ] as const;
@@ -5891,6 +5891,15 @@ function loadButtonOrder() {
     const saved = localStorage.getItem('geometryButtonOrder');
     if (saved) {
       buttonOrder = JSON.parse(saved);
+      
+      // Add any new buttons that don't exist in saved config
+      const allToolIds = TOOL_BUTTONS.map(t => t.id);
+      const newButtons = allToolIds.filter(id => !buttonOrder.includes(id));
+      if (newButtons.length > 0) {
+        // Append new buttons at the end
+        buttonOrder.push(...newButtons);
+        saveButtonOrder(); // Save updated config
+      }
     } else {
       // Initialize with default order
       buttonOrder = TOOL_BUTTONS.map(t => t.id);
