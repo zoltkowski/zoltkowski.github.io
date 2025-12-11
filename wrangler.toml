@@ -1,0 +1,3 @@
+[[kv_namespaces]]
+binding = "JSON_STORE"
+id = "constrivia_json"

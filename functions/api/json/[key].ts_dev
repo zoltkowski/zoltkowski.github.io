@@ -1,0 +1,19 @@
+export const onRequestGet = async (ctx: any) => {
+  const key = ctx.params.key;
+  const value = await ctx.env.JSON_STORE.get(key);
+  if (!value) return new Response("Not found", { status: 404 });
+  return new Response(value, { headers: { "Content-Type": "application/json" } });
+};
+
+export const onRequestPut = async (ctx: any) => {
+  const key = ctx.params.key;
+  const body = await ctx.request.text();
+  await ctx.env.JSON_STORE.put(key, body);
+  return new Response("OK");
+};
+
+export const onRequestDelete = async (ctx: any) => {
+  const key = ctx.params.key;
+  await ctx.env.JSON_STORE.delete(key);
+  return new Response("Deleted");
+};

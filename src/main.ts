@@ -1,3 +1,19 @@
+import { initCloudUI } from './cloud';
+
+async function saveToKV(key: string, data: any): Promise<void> {
+  const res = await fetch(`/api/json/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(data)
+  });
+
+  if (!res.ok) {
+    throw new Error(`KV PUT failed: ${res.status}`);
+  }
+}
+
 export type PointStyle = { color: string; size: number; hidden?: boolean };
 
 export type MidpointMeta = {
@@ -838,6 +854,7 @@ let clearAllBtn: HTMLButtonElement | null = null;
 let exportJsonBtn: HTMLButtonElement | null = null;
 let importJsonBtn: HTMLButtonElement | null = null;
 let importJsonInput: HTMLInputElement | null = null;
+let cloudFilesBtn: HTMLButtonElement | null = null;
 let themeDarkBtn: HTMLButtonElement | null = null;
 let undoBtn: HTMLButtonElement | null = null;
 let redoBtn: HTMLButtonElement | null = null;
@@ -6969,6 +6986,7 @@ function initRuntime() {
   exportJsonBtn = document.getElementById('exportJsonBtn') as HTMLButtonElement | null;
   importJsonBtn = document.getElementById('importJsonBtn') as HTMLButtonElement | null;
   importJsonInput = document.getElementById('importJsonInput') as HTMLInputElement | null;
+  cloudFilesBtn = document.getElementById('cloudFilesBtn') as HTMLButtonElement | null;
   selectDefaultFolderBtn = document.getElementById('selectDefaultFolderBtn') as HTMLButtonElement | null;
   clearDefaultFolderBtn = document.getElementById('clearDefaultFolderBtn') as HTMLButtonElement | null;
   defaultFolderPath = document.getElementById('defaultFolderPath') as HTMLElement | null;
@@ -9405,6 +9423,15 @@ function initRuntime() {
           await writable.write(blob);
           await writable.close();
 
+          // Zapisz również do KV
+          try {
+            const fileName = fileHandle.name || `geometry-${stamp}.json`;
+            const keyName = fileName.replace(/\.json$/i, '');
+            await saveToKV(keyName, snapshot);
+          } catch (kvErr) {
+            console.warn('Nie udało się zapisać do KV:', kvErr);
+          }
+
           closeZoomMenu();
           return;
         } catch (err: any) {
@@ -9425,6 +9452,15 @@ function initRuntime() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+      
+      // Zapisz również do KV
+      try {
+        const keyName = filename.replace(/\.json$/i, '');
+        await saveToKV(keyName, snapshot);
+      } catch (kvErr) {
+        console.warn('Nie udało się zapisać do KV:', kvErr);
+      }
+      
       closeZoomMenu();
     } catch (err) {
       console.error('Nie udało się wyeksportować JSON', err);
@@ -9451,6 +9487,17 @@ function initRuntime() {
     } finally {
       importJsonInput.value = '';
     }
+  });
+  cloudFilesBtn?.addEventListener('click', () => {
+    initCloudUI((data) => {
+      try {
+        applyPersistedDocument(data);
+        closeZoomMenu();
+      } catch (err) {
+        console.error('Nie udało się wczytać szkicu z chmury', err);
+        window.alert('Nie udało się wczytać pliku z chmury. Sprawdź poprawność danych.');
+      }
+    });
   });
   clearAllBtn?.addEventListener('click', () => {
     model = createEmptyModel();
