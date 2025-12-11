@@ -720,6 +720,8 @@ let modeBisectorBtn: HTMLButtonElement | null = null;
 let modeMidpointBtn: HTMLButtonElement | null = null;
 let modeSymmetricBtn: HTMLButtonElement | null = null;
 let modeParallelLineBtn: HTMLButtonElement | null = null;
+let modeTangentBtn: HTMLButtonElement | null = null;
+let modePerpBisectorBtn: HTMLButtonElement | null = null;
 let modeNgonBtn: HTMLButtonElement | null = null;
 let ngonModal: HTMLElement | null = null;
 let ngonCloseBtn: HTMLButtonElement | null = null;
@@ -6771,6 +6773,8 @@ function initRuntime() {
   modeMidpointBtn = document.getElementById('modeMidpoint') as HTMLButtonElement | null;
   modeSymmetricBtn = document.getElementById('modeSymmetric') as HTMLButtonElement | null;
   modeParallelLineBtn = document.getElementById('modeParallelLine') as HTMLButtonElement | null;
+  modeTangentBtn = document.getElementById('modeTangent') as HTMLButtonElement | null;
+  modePerpBisectorBtn = document.getElementById('modePerpBisector') as HTMLButtonElement | null;
   modeNgonBtn = document.getElementById('modeNgon') as HTMLButtonElement | null;
   debugToggleBtn = document.getElementById('debugToggle') as HTMLButtonElement | null;
   const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement | null;
@@ -8020,6 +8024,19 @@ function initRuntime() {
     e.preventDefault();
     handleToolSticky('parallelLine');
   });
+  
+  modeTangentBtn?.addEventListener('click', () => handleToolClick('tangent'));
+  modeTangentBtn?.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    handleToolSticky('tangent');
+  });
+  
+  modePerpBisectorBtn?.addEventListener('click', () => handleToolClick('perpBisector'));
+  modePerpBisectorBtn?.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    handleToolSticky('perpBisector');
+  });
+  
   modeNgonBtn?.addEventListener('click', () => {
     handleToolClick('ngon');
   });
@@ -10450,6 +10467,8 @@ function updateToolButtons() {
   applyClasses(modeMidpointBtn, 'midpoint');
   applyClasses(modeSymmetricBtn, 'symmetric');
   applyClasses(modeParallelLineBtn, 'parallelLine');
+  applyClasses(modeTangentBtn, 'tangent');
+  applyClasses(modePerpBisectorBtn, 'perpBisector');
   applyClasses(modeNgonBtn, 'ngon');
   applyClasses(modeMultiselectBtn, 'multiselect');
   applyClasses(document.getElementById('modeCircle') as HTMLButtonElement | null, 'circle');
@@ -13860,8 +13879,17 @@ function createTangentConstruction(pointIdx: number, circleIdx: number) {
   const radius = circleRadius(circle);
   if (radius <= 1e-6) return;
 
-  // Check if point is on the circle
+  // Check if point is inside the circle
   const distToCenter = Math.hypot(point.x - center.x, point.y - center.y);
+  if (distToCenter < radius - 1e-2) {
+    // Point is inside the circle - clear selections and do nothing
+    selectedPointIndex = null;
+    selectedCircleIndex = null;
+    selectedLineIndex = null;
+    return;
+  }
+
+  // Check if point is on the circle
   const ON_CIRCLE_TOLERANCE = 1e-2;
   
   if (Math.abs(distToCenter - radius) < ON_CIRCLE_TOLERANCE) {

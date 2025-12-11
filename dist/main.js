@@ -418,6 +418,8 @@ let modeBisectorBtn = null;
 let modeMidpointBtn = null;
 let modeSymmetricBtn = null;
 let modeParallelLineBtn = null;
+let modeTangentBtn = null;
+let modePerpBisectorBtn = null;
 let modeNgonBtn = null;
 let ngonModal = null;
 let ngonCloseBtn = null;
@@ -6020,6 +6022,8 @@ function initRuntime() {
     modeMidpointBtn = document.getElementById('modeMidpoint');
     modeSymmetricBtn = document.getElementById('modeSymmetric');
     modeParallelLineBtn = document.getElementById('modeParallelLine');
+    modeTangentBtn = document.getElementById('modeTangent');
+    modePerpBisectorBtn = document.getElementById('modePerpBisector');
     modeNgonBtn = document.getElementById('modeNgon');
     debugToggleBtn = document.getElementById('debugToggle');
     const settingsBtn = document.getElementById('settingsBtn');
@@ -7261,6 +7265,16 @@ function initRuntime() {
     modeParallelLineBtn?.addEventListener('dblclick', (e) => {
         e.preventDefault();
         handleToolSticky('parallelLine');
+    });
+    modeTangentBtn?.addEventListener('click', () => handleToolClick('tangent'));
+    modeTangentBtn?.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        handleToolSticky('tangent');
+    });
+    modePerpBisectorBtn?.addEventListener('click', () => handleToolClick('perpBisector'));
+    modePerpBisectorBtn?.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        handleToolSticky('perpBisector');
     });
     modeNgonBtn?.addEventListener('click', () => {
         handleToolClick('ngon');
@@ -9657,6 +9671,8 @@ function updateToolButtons() {
     applyClasses(modeMidpointBtn, 'midpoint');
     applyClasses(modeSymmetricBtn, 'symmetric');
     applyClasses(modeParallelLineBtn, 'parallelLine');
+    applyClasses(modeTangentBtn, 'tangent');
+    applyClasses(modePerpBisectorBtn, 'perpBisector');
     applyClasses(modeNgonBtn, 'ngon');
     applyClasses(modeMultiselectBtn, 'multiselect');
     applyClasses(document.getElementById('modeCircle'), 'circle');
@@ -13159,8 +13175,16 @@ function createTangentConstruction(pointIdx, circleIdx) {
     const radius = circleRadius(circle);
     if (radius <= 1e-6)
         return;
-    // Check if point is on the circle
+    // Check if point is inside the circle
     const distToCenter = Math.hypot(point.x - center.x, point.y - center.y);
+    if (distToCenter < radius - 1e-2) {
+        // Point is inside the circle - clear selections and do nothing
+        selectedPointIndex = null;
+        selectedCircleIndex = null;
+        selectedLineIndex = null;
+        return;
+    }
+    // Check if point is on the circle
     const ON_CIRCLE_TOLERANCE = 1e-2;
     if (Math.abs(distToCenter - radius) < ON_CIRCLE_TOLERANCE) {
         // Point is on circle: draw hidden radius and perpendicular to it
