@@ -491,6 +491,7 @@ type Mode =
   | 'symmetric'
   | 'parallelLine'
   | 'tangent'
+  | 'perpBisector'
   | 'ngon'
   | 'label'
   | 'handwriting'
@@ -1013,6 +1014,9 @@ let pendingParallelLine: number | null = null;
 let pendingCircleRadiusPoint: number | null = null;
 let tangentPendingPoint: number | null = null;
 let tangentPendingCircle: number | null = null;
+let perpBisectorFirstPoint: number | null = null;
+let perpBisectorSecondPoint: number | null = null;
+let perpBisectorLine: number | null = null;
 let pendingCircleRadiusLength: number | null = null;
 let draggingLabel:
   | null
@@ -2731,6 +2735,11 @@ function setMode(next: Mode) {
     tangentPendingPoint = null;
     tangentPendingCircle = null;
   }
+  if (mode !== 'perpBisector') {
+    perpBisectorFirstPoint = null;
+    perpBisectorSecondPoint = null;
+    perpBisectorLine = null;
+  }
   if (activeInkStroke && mode !== 'handwriting') {
     activeInkStroke = null;
   }
@@ -3603,6 +3612,42 @@ function handleCanvasClick(ev: PointerEvent) {
         selectedPointIndex = null;
         draw();
       }
+    }
+  } else if (mode === 'perpBisector') {
+    const hitPoint = findPoint({ x, y });
+    const lineHit = findLine({ x, y });
+
+    // User can click two points or a line
+    if (hitPoint !== null) {
+      if (perpBisectorFirstPoint === null) {
+        // First point selected
+        perpBisectorFirstPoint = hitPoint;
+        selectedPointIndex = hitPoint;
+        selectedLineIndex = null;
+        draw();
+      } else if (perpBisectorSecondPoint === null && hitPoint !== perpBisectorFirstPoint) {
+        // Second point selected, create perpendicular bisector
+        perpBisectorSecondPoint = hitPoint;
+        createPerpBisectorFromPoints(perpBisectorFirstPoint, perpBisectorSecondPoint);
+        perpBisectorFirstPoint = null;
+        perpBisectorSecondPoint = null;
+        perpBisectorLine = null;
+        draw();
+        pushHistory();
+        maybeRevertMode();
+        updateSelectionButtons();
+      }
+    } else if (lineHit && lineHit.part === 'segment') {
+      // Line segment selected, create perpendicular bisector
+      perpBisectorLine = lineHit.line;
+      createPerpBisectorFromLine(lineHit.line, lineHit.seg);
+      perpBisectorFirstPoint = null;
+      perpBisectorSecondPoint = null;
+      perpBisectorLine = null;
+      draw();
+      pushHistory();
+      maybeRevertMode();
+      updateSelectionButtons();
     }
   } else if (mode === 'circle') {
     const hitPoint = findPoint({ x, y });
@@ -4887,6 +4932,7 @@ const TOOL_BUTTONS = [
   { id: 'modeMidpoint', label: 'Punkt środkowy', mode: 'midpoint', icon: '<circle cx="6" cy="12" r="1.5" class="icon-fill"/><circle cx="18" cy="12" r="1.5" class="icon-fill"/><circle cx="12" cy="12" r="2.5" class="icon-fill"/><circle cx="12" cy="12" r="1" fill="var(--bg)" stroke="none"/>', viewBox: '0 0 24 24' },
   { id: 'modeSymmetric', label: 'Symetria', mode: 'symmetric', icon: '<line x1="12" y1="4" x2="12" y2="20" /><circle cx="7.5" cy="10" r="1.7" class="icon-fill"/><circle cx="16.5" cy="14" r="1.7" class="icon-fill"/><path d="M7.5 10 16.5 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>', viewBox: '0 0 24 24' },
   { id: 'modeTangent', label: 'Styczna', mode: 'tangent', icon: '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="18" cy="8" r="1.8" class="icon-fill"/><line x1="22" y1="4" x2="14" y2="12" stroke="currentColor" stroke-width="1.5"/>', viewBox: '0 0 24 24' },
+  { id: 'modePerpBisector', label: 'Symetralna', mode: 'perpBisector', icon: '<circle cx="7" cy="12" r="2" class="icon-fill"/><circle cx="17" cy="12" r="2" class="icon-fill"/><circle cx="12" cy="12" r="2.5" class="icon-fill"/><circle cx="12" cy="12" r="1" fill="var(--bg)" stroke="none"/><line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" stroke-width="1.5"/>', viewBox: '0 0 24 24' },
   { id: 'modeHandwriting', label: 'Pismo ręczne', mode: 'handwriting', icon: '<path d="M5.5 18.5 4 20l1.5-.1L9 19l10.5-10.5a1.6 1.6 0 0 0 0-2.2L17.7 4a1.6 1.6 0 0 0-2.2 0L5 14.5l.5 4Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 5.5 18.5 8.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>', viewBox: '0 0 24 24' },
 ] as const;
 
@@ -13724,6 +13770,74 @@ function lineCircleIntersections(
     res.push({ x: a.x + dx * t, y: a.y + dy * t });
   });
   return res;
+}
+
+function createPerpBisectorFromPoints(pointIdx1: number, pointIdx2: number) {
+  const point1 = model.points[pointIdx1];
+  const point2 = model.points[pointIdx2];
+  if (!point1 || !point2) return;
+
+  // Create hidden line segment between the two points
+  const hiddenSegmentStyle: StrokeStyle = { ...currentStrokeStyle(), hidden: true };
+  const hiddenLineIdx = addLineFromPoints(model, pointIdx1, pointIdx2, hiddenSegmentStyle);
+
+  // Create visible midpoint
+  const midX = (point1.x + point2.x) / 2;
+  const midY = (point1.y + point2.y) / 2;
+  const midpointIdx = addPoint(model, {
+    x: midX,
+    y: midY,
+    style: currentPointStyle(),
+    construction_kind: 'midpoint',
+    midpoint: {
+      parents: [point1.id, point2.id],
+      parentLineId: model.lines[hiddenLineIdx]?.id || null
+    }
+  });
+
+  // Create perpendicular line through the midpoint
+  const perpendicularIdx = createPerpendicularLineThroughPoint(midpointIdx, hiddenLineIdx);
+  
+  if (perpendicularIdx !== null) {
+    selectedLineIndex = perpendicularIdx;
+    selectedPointIndex = null;
+  }
+}
+
+function createPerpBisectorFromLine(lineIdx: number, segmentIndex: number) {
+  const line = model.lines[lineIdx];
+  if (!line || segmentIndex >= line.points.length - 1) return;
+
+  const pointIdx1 = line.points[segmentIndex];
+  const pointIdx2 = line.points[segmentIndex + 1];
+  const point1 = model.points[pointIdx1];
+  const point2 = model.points[pointIdx2];
+  if (!point1 || !point2) return;
+
+  // Create visible midpoint
+  const midX = (point1.x + point2.x) / 2;
+  const midY = (point1.y + point2.y) / 2;
+  const midpointIdx = addPoint(model, {
+    x: midX,
+    y: midY,
+    style: currentPointStyle(),
+    construction_kind: 'midpoint',
+    midpoint: {
+      parents: [point1.id, point2.id],
+      parentLineId: line.id
+    }
+  });
+
+  // Attach midpoint to the line
+  insertPointIntoLine(lineIdx, midpointIdx, { x: midX, y: midY });
+
+  // Create perpendicular line through the midpoint
+  const perpendicularIdx = createPerpendicularLineThroughPoint(midpointIdx, lineIdx);
+  
+  if (perpendicularIdx !== null) {
+    selectedLineIndex = perpendicularIdx;
+    selectedPointIndex = null;
+  }
 }
 
 function createTangentConstruction(pointIdx: number, circleIdx: number) {
