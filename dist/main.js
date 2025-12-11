@@ -5567,16 +5567,47 @@ function importButtonConfiguration(jsonString) {
         if (config.buttonOrder && Array.isArray(config.buttonOrder)) {
             // Validate that all button IDs exist
             const validIds = config.buttonOrder.filter((id) => TOOL_BUTTONS.some(t => t.id === id));
-            if (validIds.length > 0) {
-                buttonOrder = validIds;
-                saveButtonOrder();
-            }
+            // Add any new buttons that don't exist in saved config
+            const allToolIds = TOOL_BUTTONS.map(t => t.id);
+            const newButtons = allToolIds.filter(id => !validIds.includes(id));
+            // Combine: imported buttons first, then new buttons at the end
+            buttonOrder = [...validIds, ...newButtons];
+        }
+        else {
+            // No buttonOrder in config, use default
+            buttonOrder = TOOL_BUTTONS.map(t => t.id);
         }
         if (config.multiButtons && typeof config.multiButtons === 'object') {
-            buttonConfig.multiButtons = config.multiButtons;
+            // Filter out invalid button IDs from multi-button groups
+            const validMultiButtons = {};
+            Object.entries(config.multiButtons).forEach(([mainId, buttonIds]) => {
+                if (Array.isArray(buttonIds)) {
+                    const validIds = buttonIds.filter((id) => TOOL_BUTTONS.some(t => t.id === id));
+                    if (validIds.length > 0) {
+                        validMultiButtons[mainId] = validIds;
+                    }
+                }
+            });
+            buttonConfig.multiButtons = validMultiButtons;
+        }
+        else {
+            buttonConfig.multiButtons = {};
         }
         if (config.secondRow && typeof config.secondRow === 'object') {
-            buttonConfig.secondRow = config.secondRow;
+            // Filter out invalid button IDs from second-row groups
+            const validSecondRow = {};
+            Object.entries(config.secondRow).forEach(([mainId, buttonIds]) => {
+                if (Array.isArray(buttonIds)) {
+                    const validIds = buttonIds.filter((id) => TOOL_BUTTONS.some(t => t.id === id));
+                    if (validIds.length > 0) {
+                        validSecondRow[mainId] = validIds;
+                    }
+                }
+            });
+            buttonConfig.secondRow = validSecondRow;
+        }
+        else {
+            buttonConfig.secondRow = {};
         }
         // Restore theme overrides
         if (config.themeOverrides && typeof config.themeOverrides === 'object') {
