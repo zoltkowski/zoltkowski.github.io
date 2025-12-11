@@ -2308,18 +2308,16 @@ function setMode(next) {
                     }
                     else {
                         // Default behavior - use sequential uppercase letters
-                        verts.forEach((vi, i) => {
-                            const idx = labelUpperIdx + i;
-                            const text = seqLetter(idx, UPPER_SEQ);
+                        verts.forEach((vi) => {
+                            const { text, seq } = nextUpper();
                             model.points[vi].label = {
                                 text,
                                 color,
                                 offset: defaultPointLabelOffset(vi),
                                 fontSize: getLabelFontDefault(),
-                                seq: { kind: 'upper', idx }
+                                seq
                             };
                         });
-                        labelUpperIdx += verts.length;
                         changed = verts.length > 0;
                     }
                 }
