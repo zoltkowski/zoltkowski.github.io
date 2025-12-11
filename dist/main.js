@@ -11569,13 +11569,28 @@ function createPerpendicularLineThroughPoint(pointIdx, baseLineIdx) {
     const baseFirst = baseFirstIdx !== undefined ? model.points[baseFirstIdx] : null;
     const baseLast = baseLastIdx !== undefined ? model.points[baseLastIdx] : null;
     const ON_LINE_EPS = 1e-3;
-    let helperMode = 'normal';
-    let helperPos = null;
-    if (baseFirst && baseLast) {
+    let anchorOnBase = false;
+    if (baseFirst) {
         const anchorVec = { x: anchor.x - baseFirst.x, y: anchor.y - baseFirst.y };
         const signedDistance = anchorVec.x * baseNormal.x + anchorVec.y * baseNormal.y;
-        const anchorOnBase = Math.abs(signedDistance) <= ON_LINE_EPS;
-        if (!anchorOnBase) {
+        anchorOnBase = Math.abs(signedDistance) <= ON_LINE_EPS;
+    }
+    let helperMode = 'normal';
+    let helperPos = null;
+    let helperHidden = false;
+    let forceRaysVisible = false;
+    if (anchorOnBase) {
+        const smallOffset = 1.0;
+        helperPos = {
+            x: anchor.x + baseNormal.x * smallOffset,
+            y: anchor.y + baseNormal.y * smallOffset
+        };
+        helperMode = 'normal';
+        helperHidden = true;
+        forceRaysVisible = true;
+    }
+    else {
+        if (baseFirst && baseLast) {
             const projected = projectPointOnLine(anchor, baseFirst, baseLast);
             const projDist = Math.hypot(projected.x - anchor.x, projected.y - anchor.y);
             if (projDist >= ON_LINE_EPS) {
@@ -11583,23 +11598,22 @@ function createPerpendicularLineThroughPoint(pointIdx, baseLineIdx) {
                 helperPos = projected;
             }
         }
-    }
-    const normalA = { x: -dirInfo.dir.y, y: dirInfo.dir.x };
-    if (!helperPos) {
-        const reflected = reflectPointAcrossLine(anchor, baseLine);
-        helperPos = reflected;
-        if (!helperPos || Math.hypot(helperPos.x - anchor.x, helperPos.y - anchor.y) < ON_LINE_EPS) {
-            const fallback = baseLength > 1e-3 ? baseLength : 120;
-            helperPos = {
-                x: anchor.x + normalA.x * fallback,
-                y: anchor.y + normalA.y * fallback
-            };
-            helperMode = 'normal';
+        if (!helperPos) {
+            const reflected = reflectPointAcrossLine(anchor, baseLine);
+            helperPos = reflected;
+            if (!helperPos || Math.hypot(helperPos.x - anchor.x, helperPos.y - anchor.y) < ON_LINE_EPS) {
+                const fallback = baseLength > 1e-3 ? baseLength : 120;
+                helperPos = {
+                    x: anchor.x + baseNormal.x * fallback,
+                    y: anchor.y + baseNormal.y * fallback
+                };
+                helperMode = 'normal';
+            }
         }
     }
     const helperIdx = addPoint(model, {
         ...helperPos,
-        style: { color: anchor.style.color, size: anchor.style.size },
+        style: { color: anchor.style.color, size: anchor.style.size, hidden: helperHidden },
         construction_kind: 'free'
     });
     if (helperMode === 'projection') {
@@ -11634,8 +11648,8 @@ function createPerpendicularLineThroughPoint(pointIdx, baseLineIdx) {
         defining_points: [pointIdx, helperIdx],
         segmentStyles: [{ ...style }],
         segmentKeys: [segmentKeyForPoints(pointIdx, helperIdx)],
-        leftRay: baseLine.leftRay ? { ...baseLine.leftRay } : { ...style, hidden: true },
-        rightRay: baseLine.rightRay ? { ...baseLine.rightRay } : { ...style, hidden: true },
+        leftRay: forceRaysVisible ? { ...style, hidden: false } : (baseLine.leftRay ? { ...baseLine.leftRay } : { ...style, hidden: true }),
+        rightRay: forceRaysVisible ? { ...style, hidden: false } : (baseLine.rightRay ? { ...baseLine.rightRay } : { ...style, hidden: true }),
         style,
         hidden: false,
         construction_kind: 'perpendicular',
