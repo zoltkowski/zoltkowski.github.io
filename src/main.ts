@@ -490,6 +490,7 @@ type Mode =
   | 'midpoint'
   | 'symmetric'
   | 'parallelLine'
+  | 'tangent'
   | 'ngon'
   | 'label'
   | 'handwriting'
@@ -1010,6 +1011,8 @@ if (typeof document !== 'undefined') {
 let pendingParallelPoint: number | null = null;
 let pendingParallelLine: number | null = null;
 let pendingCircleRadiusPoint: number | null = null;
+let tangentPendingPoint: number | null = null;
+let tangentPendingCircle: number | null = null;
 let pendingCircleRadiusLength: number | null = null;
 let draggingLabel:
   | null
@@ -2724,6 +2727,10 @@ function setMode(next: Mode) {
     parallelAnchorPointIndex = null;
     parallelReferenceLineIndex = null;
   }
+  if (mode !== 'tangent') {
+    tangentPendingPoint = null;
+    tangentPendingCircle = null;
+  }
   if (activeInkStroke && mode !== 'handwriting') {
     activeInkStroke = null;
   }
@@ -3555,6 +3562,47 @@ function handleCanvasClick(ev: PointerEvent) {
       updateSelectionButtons();
     } else {
       draw();
+    }
+  } else if (mode === 'tangent') {
+    const hitPoint = findPoint({ x, y });
+    const circleHits = findCircles({ x, y }, currentHitRadius(), false);
+    const circleHit = circleHits.length > 0 ? circleHits[0] : null;
+
+    // User clicks point and circle in any order
+    if (hitPoint !== null) {
+      tangentPendingPoint = hitPoint;
+      selectedPointIndex = hitPoint;
+      if (tangentPendingCircle !== null) {
+        // Both selected, create tangent
+        createTangentConstruction(tangentPendingPoint, tangentPendingCircle);
+        tangentPendingPoint = null;
+        tangentPendingCircle = null;
+        draw();
+        pushHistory();
+        maybeRevertMode();
+        updateSelectionButtons();
+      } else {
+        // Only point selected so far
+        selectedCircleIndex = null;
+        draw();
+      }
+    } else if (circleHit !== null) {
+      tangentPendingCircle = circleHit.circle;
+      selectedCircleIndex = circleHit.circle;
+      if (tangentPendingPoint !== null) {
+        // Both selected, create tangent
+        createTangentConstruction(tangentPendingPoint, tangentPendingCircle);
+        tangentPendingPoint = null;
+        tangentPendingCircle = null;
+        draw();
+        pushHistory();
+        maybeRevertMode();
+        updateSelectionButtons();
+      } else {
+        // Only circle selected so far
+        selectedPointIndex = null;
+        draw();
+      }
     }
   } else if (mode === 'circle') {
     const hitPoint = findPoint({ x, y });
@@ -4838,6 +4886,7 @@ const TOOL_BUTTONS = [
   { id: 'modeBisector', label: 'Dwusieczna', mode: 'bisector', icon: '<line x1="6" y1="18" x2="20" y2="18" /><line x1="6" y1="18" x2="14" y2="6" /><line x1="6" y1="18" x2="20" y2="10" />', viewBox: '0 0 24 24' },
   { id: 'modeMidpoint', label: 'Punkt środkowy', mode: 'midpoint', icon: '<circle cx="6" cy="12" r="1.5" class="icon-fill"/><circle cx="18" cy="12" r="1.5" class="icon-fill"/><circle cx="12" cy="12" r="2.5" class="icon-fill"/><circle cx="12" cy="12" r="1" fill="var(--bg)" stroke="none"/>', viewBox: '0 0 24 24' },
   { id: 'modeSymmetric', label: 'Symetria', mode: 'symmetric', icon: '<line x1="12" y1="4" x2="12" y2="20" /><circle cx="7.5" cy="10" r="1.7" class="icon-fill"/><circle cx="16.5" cy="14" r="1.7" class="icon-fill"/><path d="M7.5 10 16.5 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>', viewBox: '0 0 24 24' },
+  { id: 'modeTangent', label: 'Styczna', mode: 'tangent', icon: '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="18" cy="8" r="1.8" class="icon-fill"/><line x1="22" y1="4" x2="14" y2="12" stroke="currentColor" stroke-width="1.5"/>', viewBox: '0 0 24 24' },
   { id: 'modeHandwriting', label: 'Pismo ręczne', mode: 'handwriting', icon: '<path d="M5.5 18.5 4 20l1.5-.1L9 19l10.5-10.5a1.6 1.6 0 0 0 0-2.2L17.7 4a1.6 1.6 0 0 0-2.2 0L5 14.5l.5 4Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 5.5 18.5 8.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>', viewBox: '0 0 24 24' },
 ] as const;
 
@@ -13675,6 +13724,131 @@ function lineCircleIntersections(
     res.push({ x: a.x + dx * t, y: a.y + dy * t });
   });
   return res;
+}
+
+function createTangentConstruction(pointIdx: number, circleIdx: number) {
+  const point = model.points[pointIdx];
+  const circle = model.circles[circleIdx];
+  if (!point || !circle) return;
+
+  const center = model.points[circle.center];
+  if (!center) return;
+
+  const radius = circleRadius(circle);
+  if (radius <= 1e-6) return;
+
+  // Check if point is on the circle
+  const distToCenter = Math.hypot(point.x - center.x, point.y - center.y);
+  const ON_CIRCLE_TOLERANCE = 1e-2;
+  
+  if (Math.abs(distToCenter - radius) < ON_CIRCLE_TOLERANCE) {
+    // Point is on circle: draw hidden radius and perpendicular to it
+    // Create hidden radius point at center (if not already there)
+    const radiusIdx = addPoint(model, {
+      x: center.x,
+      y: center.y,
+      style: { color: point.style.color, size: point.style.size, hidden: true },
+      construction_kind: 'free'
+    });
+
+    // Create hidden radius line
+    const radiusLineStyle: StrokeStyle = { ...currentStrokeStyle(), hidden: true };
+    const radiusLineIdx = addLineFromPoints(model, radiusIdx, pointIdx, radiusLineStyle);
+
+    // Create perpendicular tangent line through the point
+    const perpendicularIdx = createPerpendicularLineThroughPoint(pointIdx, radiusLineIdx);
+    
+    if (perpendicularIdx !== null) {
+      selectedLineIndex = perpendicularIdx;
+      selectedPointIndex = null;
+      selectedCircleIndex = null;
+    }
+  } else {
+    // Point is not on circle: construct tangent lines using auxiliary circle
+    // Create hidden midpoint between point and center
+    const midX = (point.x + center.x) / 2;
+    const midY = (point.y + center.y) / 2;
+    const midpointIdx = addPoint(model, {
+      x: midX,
+      y: midY,
+      style: { color: point.style.color, size: point.style.size, hidden: true },
+      construction_kind: 'free'
+    });
+
+    // Create hidden auxiliary circle centered at midpoint, passing through point
+    const auxRadius = Math.hypot(point.x - midX, point.y - midY);
+    const auxCircleIdx = addCircleWithCenter(midpointIdx, auxRadius, [pointIdx]);
+    const auxCircle = model.circles[auxCircleIdx];
+    if (auxCircle) {
+      auxCircle.style = { ...auxCircle.style, hidden: true };
+      auxCircle.hidden = true;
+    }
+
+    // Find intersection points of the two circles
+    const intersections = circleCircleIntersections(
+      { x: midX, y: midY },
+      auxRadius,
+      { x: center.x, y: center.y },
+      radius
+    );
+
+    if (intersections.length > 0) {
+      // Create intersection points (tangent points on the original circle)
+      const tangentPointIndices: number[] = [];
+      for (const inter of intersections) {
+        const tangentPointIdx = addPoint(model, {
+          ...inter,
+          style: currentPointStyle(),
+          construction_kind: 'free'
+        });
+        // Attach to both circles
+        attachPointToCircle(circleIdx, tangentPointIdx, inter);
+        attachPointToCircle(auxCircleIdx, tangentPointIdx, inter);
+        tangentPointIndices.push(tangentPointIdx);
+      }
+
+      // Create rays from point to tangent points
+      const rayStyle = currentStrokeStyle();
+      for (let i = 0; i < tangentPointIndices.length; i++) {
+        const tangentPointIdx = tangentPointIndices[i];
+        const lineIdx = addLineFromPoints(model, pointIdx, tangentPointIdx, rayStyle);
+        const line = model.lines[lineIdx];
+        if (line) {
+          // Make it a ray: visible toward tangent point, hidden on the other side
+          // Determine which end is which
+          const pt1 = model.points[line.points[0]];
+          const pt2 = model.points[line.points[line.points.length - 1]];
+          
+          if (pt1 && pt2) {
+            // Check which end is the point and which is the tangent point
+            const isPointFirst = Math.hypot(pt1.x - point.x, pt1.y - point.y) < 1e-3;
+            
+            if (isPointFirst) {
+              // Point is at left, tangent at right: show right ray, hide left
+              line.leftRay = { ...rayStyle, hidden: true };
+              line.rightRay = { ...rayStyle, hidden: false }; // Show both rays by default
+            } else {
+              // Tangent is at left, point at right: show left ray, hide right
+              line.leftRay = { ...rayStyle, hidden: false }; // Show both rays by default
+              line.rightRay = { ...rayStyle, hidden: true };
+            }
+          }
+        }
+      }
+
+      // Select the first tangent line
+      if (tangentPointIndices.length > 0) {
+        const firstLineIdx = model.lines.findIndex(l => 
+          l.points.includes(pointIdx) && l.points.includes(tangentPointIndices[0])
+        );
+        if (firstLineIdx >= 0) {
+          selectedLineIndex = firstLineIdx;
+          selectedPointIndex = null;
+          selectedCircleIndex = null;
+        }
+      }
+    }
+  }
 }
 
 function circleCircleIntersections(
