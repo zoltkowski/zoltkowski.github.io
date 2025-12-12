@@ -167,6 +167,36 @@ input[type="color"] { background: transparent; border: 1px solid #374151; paddin
 .theme-light .debug-panel__close:hover { background: rgba(0,0,0,0.08); }
 .debug-panel__content { padding: 12px; overflow: auto; }
 
+/* Cloud Panel */
+.cloud-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--panel-border); padding-bottom: 4px; }
+.cloud-tab { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: transparent; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text); opacity: 0.6; transition: all 0.2s; border-radius: 4px 4px 0 0; }
+.cloud-tab:hover { opacity: 0.9; background: rgba(255, 255, 255, 0.05); }
+.cloud-tab--active { opacity: 1; border-bottom-color: #3b82f6; }
+.cloud-tab .icon { width: 16px; height: 16px; }
+.cloud-content { display: flex; flex-direction: column; gap: 8px; }
+.cloud-list { display: flex; flex-direction: column; gap: 0; }
+.cloud-toolbar { display: flex; gap: 4px; padding: 4px; border-bottom: 1px solid var(--panel-border); margin-bottom: 0; }
+#cloudToolbarHeader { display: flex; gap: 4px; align-items: center; margin-left: 8px; pointer-events: auto; z-index: 1; }
+#cloudToolbarHeader .cloud-toolbar { border-bottom: none; padding: 0; margin: 0; pointer-events: auto; }
+.cloud-toolbar-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; border-radius: 4px; cursor: pointer; transition: all 0.15s; color: var(--text); opacity: 0.7; }
+.cloud-toolbar-btn:hover { background: rgba(255, 255, 255, 0.08); opacity: 1; }
+.cloud-toolbar-btn .icon { width: 20px; height: 20px; }
+.cloud-file-list-container { display: flex; flex-direction: column; gap: 0; max-height: 350px; overflow-y: auto; }
+.cloud-loading, .cloud-empty, .cloud-error { text-align: center; padding: 20px; color: var(--text); opacity: 0.7; font-size: 13px; }
+.cloud-error { color: #ef4444; opacity: 1; }
+.cloud-file-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; background: transparent; border: none; border-bottom: 1px solid var(--panel-border); transition: background 0.15s; }
+.cloud-file-item:hover { background: rgba(255, 255, 255, 0.03); }
+.cloud-file-item--active { background: rgba(59, 130, 246, 0.15); }
+.cloud-file-item--active:hover { background: rgba(59, 130, 246, 0.2); }
+.cloud-file-item__name { font-size: 13px; font-weight: 400; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cloud-file-item__actions { display: flex; gap: 4px; }
+.cloud-file-item__btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; border-radius: 4px; cursor: pointer; transition: all 0.15s; color: var(--text); opacity: 0.7; }
+.cloud-file-item__btn:hover { background: rgba(255, 255, 255, 0.08); opacity: 1; }
+.cloud-file-item__btn--delete:hover { background: #ef4444; border-color: #ef4444; color: white; }
+.cloud-file-item__btn .icon { width: 26px; height: 26px; }
+.theme-light .cloud-file-item:hover { background: rgba(0, 0, 0, 0.03); }
+.theme-light .cloud-file-item__btn:hover { background: rgba(0, 0, 0, 0.08); }
+
 /* Settings Modal */
 .modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; overscroll-behavior: contain; }
   .modal-content { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 16px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); max-width: 800px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: contain; }
@@ -227,155 +257,4 @@ input[type="color"] { background: transparent; border: 1px solid #374151; paddin
 
 @media (max-width: 900px) {
   .appearance-config { grid-template-columns: 1fr; }
-}
-
-/* Cloud Dialog */
-.cloud-dialog {
-  max-width: 600px;
-  width: 90vw;
-  max-height: 80vh;
-  border: 2px solid var(--panel-border);
-  border-radius: 12px;
-  background: var(--panel);
-  color: var(--text);
-  padding: 0;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-}
-.cloud-dialog::backdrop {
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(4px);
-}
-.cloud-dialog__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--panel-border);
-}
-.cloud-dialog__header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-.cloud-dialog__close {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  color: var(--text);
-  opacity: 0.7;
-  transition: opacity 0.2s;
-}
-.cloud-dialog__close:hover {
-  opacity: 1;
-}
-.cloud-dialog__close .icon {
-  width: 24px;
-  height: 24px;
-}
-.cloud-dialog__tabs {
-  display: flex;
-  gap: 4px;
-  padding: 8px 16px 0;
-  border-bottom: 1px solid var(--panel-border);
-}
-.cloud-dialog__tab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
-  opacity: 0.6;
-  transition: all 0.2s;
-}
-.cloud-dialog__tab:hover {
-  opacity: 0.9;
-  background: var(--btn-hover);
-}
-.cloud-dialog__tab--active {
-  opacity: 1;
-  border-bottom-color: #3b82f6;
-}
-.cloud-dialog__tab .icon {
-  width: 18px;
-  height: 18px;
-}
-.cloud-dialog__content {
-  padding: 16px 24px 24px;
-  overflow-y: auto;
-  max-height: calc(80vh - 160px);
-}
-.cloud-dialog__list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.cloud-dialog__loading,
-.cloud-dialog__empty,
-.cloud-dialog__error {
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--text);
-  opacity: 0.7;
-}
-.cloud-dialog__error {
-  color: #ef4444;
-  opacity: 1;
-}
-.cloud-file-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: var(--btn);
-  border: 1px solid var(--btn-border);
-  border-radius: 8px;
-  transition: background 0.2s;
-}
-.cloud-file-item:hover {
-  background: var(--btn-hover);
-}
-.cloud-file-item__name {
-  font-size: 14px;
-  font-weight: 500;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cloud-file-item__actions {
-  display: flex;
-  gap: 8px;
-}
-.cloud-file-item__btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
-  border: 1px solid var(--btn-border);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-  color: var(--text);
-}
-.cloud-file-item__btn:hover {
-  background: var(--btn-hover);
-  transform: scale(1.05);
-}
-.cloud-file-item__btn--delete:hover {
-  background: #ef4444;
-  border-color: #dc2626;
-  color: white;
-}
-.cloud-file-item__btn .icon {
-  width: 20px;
-  height: 20px;
 }

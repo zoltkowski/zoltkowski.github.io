@@ -40,6 +40,9 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
+  const url = new URL(event.request.url);
+  
+  if (url.origin !== self.location.origin) return;
 
   // Nie ruszamy POST/PUT itd.
   if (req.method !== 'GET') {

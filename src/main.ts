@@ -1,18 +1,4 @@
-import { initCloudUI } from './cloud';
-
-async function saveToKV(key: string, data: any): Promise<void> {
-  const res = await fetch(`/api/json/${encodeURIComponent(key)}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(data)
-  });
-
-  if (!res.ok) {
-    throw new Error(`KV PUT failed: ${res.status}`);
-  }
-}
+import { initCloudPanel, initCloudUI, saveToKV } from './cloud';
 
 export type PointStyle = { color: string; size: number; hidden?: boolean };
 
@@ -7393,6 +7379,10 @@ function initRuntime() {
   if (strokeColorInput) {
     strokeColorInput.value = THEME.defaultStroke;
   }
+  
+  // Initialize cloud panel
+  initCloudPanel();
+  
   debugToggleBtn?.addEventListener('click', () => {
     debugVisible = !debugVisible;
     renderDebugPanel();

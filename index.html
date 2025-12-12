@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#111827">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=4">
   <title>Constrivia</title>
 </head>
 <body class="theme-dark">
@@ -337,6 +337,50 @@
         </button>
       </div>
       <div id="debugContent" class="debug-panel__content"></div>
+    </div>
+    <div id="cloudPanel" class="debug-panel" role="dialog" aria-label="Pliki" aria-modal="false" style="left: 20px; top: 80px; z-index: 90;">
+      <div id="cloudPanelHandle" class="debug-panel__header">
+        <span class="debug-panel__title" id="cloudPanelTitle">Pliki</span>
+        <div id="cloudToolbarHeader" style="display: none;"></div>
+        <button id="cloudCloseBtn" class="debug-panel__close" type="button" aria-label="Zamknij panel plików">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </div>
+      <div class="debug-panel__content">
+        <div class="cloud-tabs">
+          <button class="cloud-tab cloud-tab--active" data-tab="local">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
+            </svg>
+            Lokalne
+          </button>
+          <button class="cloud-tab" data-tab="library">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
+            </svg>
+            Biblioteka
+          </button>
+          <button class="cloud-tab" data-tab="cloud">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+            </svg>
+            Chmura
+          </button>
+        </div>
+        <div class="cloud-content">
+          <div class="cloud-list" id="localFileList">
+            <div class="cloud-loading">Ładowanie...</div>
+          </div>
+          <div class="cloud-list" id="libraryFileList" style="display: none;">
+            <div class="cloud-loading">Ładowanie...</div>
+          </div>
+          <div class="cloud-list" id="cloudFileList" style="display: none;">
+            <div class="cloud-loading">Ładowanie...</div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="toolbar toolbar-bare toolbar-bottom">
       <div class="tool-row tool-row-second" id="toolbarSecondRow" style="justify-content:center; display:none;">
