@@ -1,0 +1,236 @@
+{
+  "version": 1,
+  "model": {
+    "points": [
+      {
+        "object_type": "point",
+        "id": "pt1",
+        "x": 984,
+        "y": 633,
+        "style": {
+          "color": "#15a3ff",
+          "size": 2
+        },
+        "defining_parents": [],
+        "parent_refs": [],
+        "children": [],
+        "construction_kind": "free",
+        "incident_objects": []
+      },
+      {
+        "object_type": "point",
+        "id": "pt2",
+        "x": 1192.0096151623766,
+        "y": 633,
+        "style": {
+          "color": "#15a3ff",
+          "size": 2
+        },
+        "defining_parents": [],
+        "parent_refs": [],
+        "children": [],
+        "construction_kind": "free",
+        "incident_objects": []
+      },
+      {
+        "object_type": "point",
+        "id": "pt3",
+        "x": 1088.0048075811883,
+        "y": 452.8583890379572,
+        "style": {
+          "color": "#15a3ff",
+          "size": 2
+        },
+        "defining_parents": [],
+        "parent_refs": [],
+        "children": [],
+        "construction_kind": "free",
+        "incident_objects": []
+      }
+    ],
+    "lines": [
+      {
+        "object_type": "line",
+        "id": "ln1",
+        "points": [
+          0,
+          1
+        ],
+        "defining_points": [
+          0,
+          1
+        ],
+        "segmentStyles": [
+          {
+            "color": "#15a3ff",
+            "width": 2,
+            "type": "solid",
+            "tick": 0
+          }
+        ],
+        "segmentKeys": [
+          "pt1-pt2"
+        ],
+        "style": {
+          "color": "#15a3ff",
+          "width": 2,
+          "type": "solid",
+          "tick": 0
+        },
+        "leftRay": {
+          "color": "#15a3ff",
+          "width": 2,
+          "type": "solid",
+          "tick": 0,
+          "hidden": true
+        },
+        "rightRay": {
+          "color": "#15a3ff",
+          "width": 2,
+          "type": "solid",
+          "tick": 0,
+          "hidden": true
+        },
+        "construction_kind": "free",
+        "defining_parents": [],
+        "children": []
+      },
+      {
+        "object_type": "line",
+        "id": "ln2",
+        "points": [
+          1,
+          2
+        ],
+        "defining_points": [
+          1,
+          2
+        ],
+        "segmentStyles": [
+          {
+            "color": "#15a3ff",
+            "width": 2,
+            "type": "solid",
+            "tick": 0
+          }
+        ],
+        "segmentKeys": [
+          "pt2-pt3"
+        ],
+        "style": {
+          "color": "#15a3ff",
+          "width": 2,
+          "type": "solid",
+          "tick": 0
+        },
+        "leftRay": {
+          "color": "#15a3ff",
+          "width": 2,
+          "type": "solid",
+          "tick": 0,
+          "hidden": true
+        },
+        "rightRay": {
+          "color": "#15a3ff",
+          "width": 2,
+          "type": "solid",
+          "tick": 0,
+          "hidden": true
+        },
+        "construction_kind": "free",
+        "defining_parents": [],
+        "children": []
+      },
+      {
+        "object_type": "line",
+        "id": "ln3",
+        "points": [
+          2,
+          0
+        ],
+        "defining_points": [
+          2,
+          0
+        ],
+        "segmentStyles": [
+          {
+            "color": "#15a3ff",
+            "width": 2,
+            "type": "solid",
+            "tick": 0
+          }
+        ],
+        "segmentKeys": [
+          "pt1-pt3"
+        ],
+        "style": {
+          "color": "#15a3ff",
+          "width": 2,
+          "type": "solid",
+          "tick": 0
+        },
+        "leftRay": {
+          "color": "#15a3ff",
+          "width": 2,
+          "type": "solid",
+          "tick": 0,
+          "hidden": true
+        },
+        "rightRay": {
+          "color": "#15a3ff",
+          "width": 2,
+          "type": "solid",
+          "tick": 0,
+          "hidden": true
+        },
+        "construction_kind": "free",
+        "defining_parents": [],
+        "children": []
+      }
+    ],
+    "circles": [],
+    "angles": [],
+    "polygons": [
+      {
+        "object_type": "polygon",
+        "id": "poly1",
+        "lines": [
+          0,
+          1,
+          2
+        ],
+        "construction_kind": "free",
+        "defining_parents": [],
+        "children": []
+      }
+    ],
+    "inkStrokes": [],
+    "labels": [],
+    "idCounters": {
+      "point": 3,
+      "line": 3,
+      "circle": 0,
+      "angle": 0,
+      "polygon": 1
+    }
+  },
+  "panOffset": {
+    "x": 0,
+    "y": 0
+  },
+  "zoom": 1,
+  "labelState": {
+    "upper": 0,
+    "lower": 0,
+    "greek": 0,
+    "freeUpper": [],
+    "freeLower": [],
+    "freeGreek": []
+  },
+  "recentColors": [
+    "#15a3ff"
+  ],
+  "showHidden": false,
+  "measurementReferenceSegment": null,
+  "measurementReferenceValue": null
+}

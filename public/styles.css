@@ -273,10 +273,43 @@ input[type="color"] { background: transparent; border: 1px solid #374151; paddin
   width: 24px;
   height: 24px;
 }
+.cloud-dialog__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+.cloud-dialog__tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+.cloud-dialog__tab:hover {
+  opacity: 0.9;
+  background: var(--btn-hover);
+}
+.cloud-dialog__tab--active {
+  opacity: 1;
+  border-bottom-color: #3b82f6;
+}
+.cloud-dialog__tab .icon {
+  width: 18px;
+  height: 18px;
+}
 .cloud-dialog__content {
   padding: 16px 24px 24px;
   overflow-y: auto;
-  max-height: calc(80vh - 100px);
+  max-height: calc(80vh - 160px);
 }
 .cloud-dialog__list {
   display: flex;

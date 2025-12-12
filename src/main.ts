@@ -13040,6 +13040,75 @@ function serializeCurrentDocument(): PersistedDocument {
   } satisfies PersistedDocument;
 }
 
+function centerConstruction() {
+  // Oblicz bounding box wszystkich punktów w konstrukcji
+  if (model.points.length === 0) return;
+  
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  
+  // Uwzględnij punkty
+  for (const point of model.points) {
+    minX = Math.min(minX, point.x);
+    maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y);
+    maxY = Math.max(maxY, point.y);
+  }
+  
+  // Uwzględnij środki i promienie okręgów
+  for (const circle of model.circles) {
+    const cp = model.points[circle.center];
+    const rp = model.points[circle.radius_point];
+    if (cp && rp) {
+      const radius = Math.sqrt((cp.x - rp.x) ** 2 + (cp.y - rp.y) ** 2);
+      minX = Math.min(minX, cp.x - radius);
+      maxX = Math.max(maxX, cp.x + radius);
+      minY = Math.min(minY, cp.y - radius);
+      maxY = Math.max(maxY, cp.y + radius);
+    }
+  }
+  
+  // Uwzględnij swobodne etykiety
+  for (const label of model.labels) {
+    minX = Math.min(minX, label.pos.x);
+    maxX = Math.max(maxX, label.pos.x);
+    minY = Math.min(minY, label.pos.y);
+    maxY = Math.max(maxY, label.pos.y);
+  }
+  
+  // Uwzględnij pisma ręczne
+  for (const stroke of model.inkStrokes) {
+    for (const point of stroke.points) {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minY = Math.min(minY, point.y);
+      maxY = Math.max(maxY, point.y);
+    }
+  }
+  
+  // Jeśli nie ma żadnych obiektów, nie centruj
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX) || 
+      !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+    return;
+  }
+  
+  // Oblicz środek konstrukcji
+  const constructionCenterX = (minX + maxX) / 2;
+  const constructionCenterY = (minY + maxY) / 2;
+  
+  // Oblicz środek ekranu (w współrzędnych świata)
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const screenCenterX = rect.width / 2;
+  const screenCenterY = rect.height / 2;
+  
+  // Ustaw panOffset tak, żeby środek konstrukcji był w środku ekranu
+  panOffset.x = screenCenterX - constructionCenterX * zoomFactor;
+  panOffset.y = screenCenterY - constructionCenterY * zoomFactor;
+}
+
 function applyPersistedDocument(raw: unknown) {
   if (!raw || typeof raw !== 'object') throw new Error('Brak danych w pliku JSON');
   const doc = raw as Partial<PersistedDocument>;
@@ -13253,6 +13322,10 @@ function applyPersistedDocument(raw: unknown) {
   }
   updateSelectionButtons();
   updateOptionButtons();
+  
+  // Wycentruj konstrukcję na ekranie
+  centerConstruction();
+  
   draw();
   history = [];
   historyIndex = -1;
