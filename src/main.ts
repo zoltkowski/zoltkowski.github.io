@@ -14172,13 +14172,8 @@ function createTangentConstruction(pointIdx: number, circleIdx: number) {
   
   if (Math.abs(distToCenter - radius) < ON_CIRCLE_TOLERANCE) {
     // Point is on circle: draw hidden radius and perpendicular to it
-    // Create hidden radius point at center (if not already there)
-    const radiusIdx = addPoint(model, {
-      x: center.x,
-      y: center.y,
-      style: { color: point.style.color, size: point.style.size, hidden: true },
-      construction_kind: 'free'
-    });
+    // Use existing center point
+    const radiusIdx = circle.center;
 
     // Create hidden radius line
     const radiusLineStyle: StrokeStyle = { ...currentStrokeStyle(), hidden: true };
@@ -14201,7 +14196,8 @@ function createTangentConstruction(pointIdx: number, circleIdx: number) {
       x: midX,
       y: midY,
       style: { color: point.style.color, size: point.style.size, hidden: true },
-      construction_kind: 'free'
+      construction_kind: 'midpoint',
+      midpoint: { parents: [point.id, center.id], parentLineId: null }
     });
 
     // Create hidden auxiliary circle centered at midpoint, passing through point
