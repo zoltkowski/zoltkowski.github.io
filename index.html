@@ -591,6 +591,13 @@
                   </div>
                 </div>
                 <div class="config-row">
+                  <label>Kolor okna (panel):</label>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="color" id="themePanelColor" class="color-input">
+                    <input type="text" id="themePanelColorHex" class="color-hex" placeholder="#rrggbb" maxlength="7">
+                  </div>
+                </div>
+                <div class="config-row">
                   <label>Kolor obrysu:</label>
                   <div style="display:flex; align-items:center; gap:8px;">
                     <input type="color" id="themeStrokeColor" class="color-input">
@@ -605,12 +612,29 @@
                   </div>
                 </div>
                 <div class="config-row">
-                  <label>Kolor okna (panel):</label>
-                  <div style="display:flex; align-items:center; gap:8px;">
-                    <input type="color" id="themePanelColor" class="color-input">
-                    <input type="text" id="themePanelColorHex" class="color-hex" placeholder="#rrggbb" maxlength="7">
+                  <label>Styl linii zaznaczenia:</label>
+                  <select id="themeSelectionLineStyle" class="config-select" style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--fg);">
+                    <option value="auto">Bez zmian</option>
+                    <option value="dashed">Przerywana</option>
+                    <option value="dotted">Kropkowana</option>
+                  </select>
+                </div>
+                <div class="config-row">
+                  <label>Efekt zaznaczenia:</label>
+                  <select id="themeSelectionEffect" class="config-select" style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--fg);">
+                    <option value="color">Kolor</option>
+                    <option value="halo">Poświata</option>
+                  </select>
+                </div>
+                <div class="config-row">
+                  <label>Szerokość zaznaczenia:</label>
+                  <div class="size-control">
+                    <button class="size-btn" data-action="decrease" data-target="highlightWidth">−</button>
+                    <span class="size-value" id="themeHighlightWidthValue">3 px</span>
+                    <button class="size-btn" data-action="increase" data-target="highlightWidth">+</button>
                   </div>
                 </div>
+
               </div>
  
               <div class="appearance-preview">
@@ -654,14 +678,7 @@
                     <button class="size-btn" data-action="increase" data-target="fontSize">+</button>
                   </div>
                 </div>
-                <div class="config-row">
-                  <label>Szerokość zaznaczenia:</label>
-                  <div class="size-control">
-                    <button class="size-btn" data-action="decrease" data-target="highlightWidth">−</button>
-                    <span class="size-value" id="themeHighlightWidthValue">3 px</span>
-                    <button class="size-btn" data-action="increase" data-target="highlightWidth">+</button>
-                  </div>
-                </div>
+
               </div>
 
               <div class="config-section">
