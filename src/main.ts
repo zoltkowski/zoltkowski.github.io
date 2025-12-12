@@ -528,6 +528,8 @@ type ThemeConfig = {
   highlight: string;
   selectionLineStyle: SelectionLineStyle;
   selectionEffect: SelectionEffect;
+  selectionPointStyleSameAsLine: boolean;
+  selectionPointRadius: number;
   preview: string;
   pointSize: number;
   lineWidth: number;
@@ -548,6 +550,8 @@ const THEME_PRESETS: Record<ThemeName, ThemeConfig> = {
     highlight: '#fbbf24',
     selectionLineStyle: 'auto',
     selectionEffect: 'color',
+    selectionPointStyleSameAsLine: false,
+    selectionPointRadius: 8,
     preview: '#22c55e',
     pointSize: 2,
     lineWidth: 2,
@@ -566,6 +570,8 @@ const THEME_PRESETS: Record<ThemeName, ThemeConfig> = {
     highlight: '#555555',
     selectionLineStyle: 'auto',
     selectionEffect: 'color',
+    selectionPointStyleSameAsLine: false,
+    selectionPointRadius: 8,
     preview: DEFAULT_COLORS_LIGHT[0],
     pointSize: 2,
     lineWidth: 2,
@@ -1964,11 +1970,24 @@ function hasMultiSelection(): boolean {
          multiSelectedInkStrokes.size > 0;
 }
 
-function applySelectionStyle(ctx: CanvasRenderingContext2D, baseWidth: number, color: string) {
+function applySelectionStyle(ctx: CanvasRenderingContext2D, baseWidth: number, color: string, forPoint: boolean = false) {
   const lineStyle = THEME.selectionLineStyle || 'auto';
   const effect = THEME.selectionEffect || 'color';
+  const sameStyle = THEME.selectionPointStyleSameAsLine ?? false;
   
   ctx.save();
+  
+  // For points, check if we should use custom style or line style
+  if (forPoint && !sameStyle) {
+    // Fixed default style for points when checkbox is unchecked
+    ctx.globalAlpha = 1.0;
+    ctx.lineWidth = renderWidth(2);
+    ctx.strokeStyle = color;
+    ctx.setLineDash([6, 3]);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
   
   // Determine line width and opacity based on effect
   if (effect === 'halo') {
@@ -1992,6 +2011,9 @@ function applySelectionStyle(ctx: CanvasRenderingContext2D, baseWidth: number, c
     const dotSize = ctx.lineWidth;
     ctx.setLineDash([0, dotSize * 2]);
     ctx.lineCap = 'round';
+  } else if (forPoint) {
+    // For points with 'auto', use dashed as default
+    ctx.setLineDash([6, 3]);
   } else {
     // 'auto' - preserve existing dash (do nothing to setLineDash) or reset if needed?
     // Since we are usually calling this after drawing the object, the context might have dash set.
@@ -2388,8 +2410,8 @@ function draw() {
       ctx!.scale(1 / zoomFactor, 1 / zoomFactor);
       
       ctx!.beginPath();
-      ctx!.arc(0, 0, r + 4, 0, Math.PI * 2);
-      applySelectionStyle(ctx!, 2, highlightColor);
+      ctx!.arc(0, 0, THEME.selectionPointRadius, 0, Math.PI * 2);
+      applySelectionStyle(ctx!, 2, highlightColor, true);
       ctx!.restore();
     }
     ctx!.restore();
@@ -2497,16 +2519,18 @@ function draw() {
   // Highlight multiselected objects
   if (mode === 'multiselect') {
     ctx!.save();
-    ctx!.strokeStyle = THEME.highlight;
-    ctx!.lineWidth = renderWidth(THEME.highlightWidth ?? 3);
-    ctx!.setLineDash([6, 3]);
     
     multiSelectedPoints.forEach(idx => {
       const p = model.points[idx];
       if (!p) return;
+      const r = (p.style.size ?? THEME.pointSize) + 2;
+      ctx!.save();
+      ctx!.translate(p.x, p.y);
+      ctx!.scale(1 / zoomFactor, 1 / zoomFactor);
       ctx!.beginPath();
-      ctx!.arc(p.x, p.y, screenUnits(12), 0, Math.PI * 2);
-      ctx!.stroke();
+      ctx!.arc(0, 0, THEME.selectionPointRadius, 0, Math.PI * 2);
+      applySelectionStyle(ctx!, 2, THEME.highlight, true);
+      ctx!.restore();
     });
     
     multiSelectedLines.forEach(idx => {
@@ -2517,10 +2541,11 @@ function draw() {
         const a = model.points[line.points[i - 1]];
         const b = model.points[pi];
         if (!a || !b) return;
+        const style = line.segmentStyles?.[i - 1] ?? line.style;
         ctx!.beginPath();
         ctx!.moveTo(a.x, a.y);
         ctx!.lineTo(b.x, b.y);
-        ctx!.stroke();
+        applySelectionStyle(ctx!, style.width, THEME.highlight);
       });
     });
     
@@ -6486,12 +6511,14 @@ function initAppearanceTab() {
   const themeHighlightColorHex = document.getElementById('themeHighlightColorHex') as HTMLInputElement;
   const themeSelectionLineStyle = document.getElementById('themeSelectionLineStyle') as HTMLSelectElement;
   const themeSelectionEffect = document.getElementById('themeSelectionEffect') as HTMLSelectElement;
+  const themeSelectionPointStyleSameAsLine = document.getElementById('themeSelectionPointStyleSameAsLine') as HTMLInputElement;
   const themePanelColorHex = document.getElementById('themePanelColorHex') as HTMLInputElement;
   const themeLineWidthValue = document.getElementById('themeLineWidthValue');
   const themePointSizeValue = document.getElementById('themePointSizeValue');
   const themeArcRadiusValue = document.getElementById('themeArcRadiusValue');
   const themeFontSizeValue = document.getElementById('themeFontSizeValue');
   const themeHighlightWidthValue = document.getElementById('themeHighlightWidthValue');
+  const themeSelectionPointRadiusValue = document.getElementById('themeSelectionPointRadiusValue');
   const resetBtn = document.getElementById('resetThemeDefaults');
   
   // Wczytaj aktualne wartości
@@ -6511,11 +6538,13 @@ function initAppearanceTab() {
     if (themeHighlightColorHex) themeHighlightColorHex.value = (current.highlight || base.highlight).toLowerCase();
     if (themeSelectionLineStyle) themeSelectionLineStyle.value = current.selectionLineStyle || base.selectionLineStyle || 'auto';
     if (themeSelectionEffect) themeSelectionEffect.value = current.selectionEffect || base.selectionEffect || 'color';
+    if (themeSelectionPointStyleSameAsLine) themeSelectionPointStyleSameAsLine.checked = current.selectionPointStyleSameAsLine ?? base.selectionPointStyleSameAsLine ?? false;
     if (themeLineWidthValue) themeLineWidthValue.textContent = `${current.lineWidth || base.lineWidth} px`;
     if (themePointSizeValue) themePointSizeValue.textContent = `${current.pointSize || base.pointSize} px`;
     if (themeArcRadiusValue) themeArcRadiusValue.textContent = `${current.angleDefaultRadius || base.angleDefaultRadius} px`;
     if (themeFontSizeValue) themeFontSizeValue.textContent = `${current.fontSize || base.fontSize} px`;
     if (themeHighlightWidthValue) themeHighlightWidthValue.textContent = `${current.highlightWidth || base.highlightWidth} px`;
+    if (themeSelectionPointRadiusValue) themeSelectionPointRadiusValue.textContent = `${current.selectionPointRadius || base.selectionPointRadius} px`;
     
     // Aktualizuj przyciski motywu
     themeBtns.forEach(btn => {
@@ -6649,6 +6678,10 @@ function initAppearanceTab() {
     const v = (e.target as HTMLSelectElement).value;
     saveThemeValue('selectionEffect', v);
   });
+  themeSelectionPointStyleSameAsLine?.addEventListener('change', (e) => {
+    const v = (e.target as HTMLInputElement).checked;
+    saveThemeValue('selectionPointStyleSameAsLine', v);
+  });
   
   // Rozmiary
   const sizeBtns = document.querySelectorAll<HTMLButtonElement>('.size-btn');
@@ -6695,6 +6728,12 @@ function initAppearanceTab() {
       const newValue = Math.max(0.1, Math.min(20, Math.round(val * 10) / 10));
       saveThemeValue('highlightWidth', newValue);
       if (themeHighlightWidthValue) themeHighlightWidthValue.textContent = `${newValue} px`;
+    } else if (target === 'selectionPointRadius') {
+      const step = 1;
+      const val = (current.selectionPointRadius || base.selectionPointRadius) + delta * step;
+      const newValue = Math.max(1, Math.min(50, val));
+      saveThemeValue('selectionPointRadius', newValue);
+      if (themeSelectionPointRadiusValue) themeSelectionPointRadiusValue.textContent = `${newValue} px`;
     }
   }
 
@@ -6841,11 +6880,100 @@ function initAppearanceTab() {
     
     // Punkty
     points.forEach((p, i) => {
-      ctx.fillStyle = i === 1 ? theme.highlight : theme.defaultStroke;
+      ctx.fillStyle = theme.defaultStroke;
       ctx.beginPath();
       ctx.arc(p.x, p.y, theme.pointSize + 2, 0, Math.PI * 2);
       ctx.fill();
     });
+    
+    // Zaznaczenie punktu B
+    ctx.save();
+    
+    // Determine point selection style based on checkbox
+    if (theme.selectionPointStyleSameAsLine) {
+      // Use line settings
+      if (effect === 'halo') {
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = (theme.highlightWidth || 1.5) * 4;
+      } else {
+        ctx.globalAlpha = 1.0;
+        ctx.lineWidth = theme.highlightWidth || 1.5;
+      }
+      
+      if (lineStyle === 'dashed') {
+        ctx.setLineDash([4, 4]);
+      } else if (lineStyle === 'dotted') {
+        const dotSize = ctx.lineWidth;
+        ctx.setLineDash([0, dotSize * 2]);
+        ctx.lineCap = 'round';
+      } else {
+        ctx.setLineDash([6, 3]);
+      }
+    } else {
+      // Fixed default style for points
+      ctx.globalAlpha = 1.0;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 3]);
+    }
+    
+    ctx.strokeStyle = theme.highlight;
+    ctx.beginPath();
+    ctx.arc(points[1].x, points[1].y, theme.selectionPointRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    if (theme.selectionPointStyleSameAsLine && lineStyle === 'dotted') {
+      ctx.lineCap = 'butt';
+    }
+    ctx.restore();
+    
+    // Punkt centralny (zaznaczony)
+    const centerPoint = {
+      x: (points[0].x + points[1].x + points[2].x) / 3,
+      y: (points[0].y + points[1].y + points[2].y) / 3
+    };
+    ctx.fillStyle = theme.defaultStroke;
+    ctx.beginPath();
+    ctx.arc(centerPoint.x, centerPoint.y, theme.pointSize + 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Zaznaczenie punktu centralnego
+    ctx.save();
+    
+    if (theme.selectionPointStyleSameAsLine) {
+      // Use line settings
+      if (effect === 'halo') {
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = (theme.highlightWidth || 1.5) * 4;
+      } else {
+        ctx.globalAlpha = 1.0;
+        ctx.lineWidth = theme.highlightWidth || 1.5;
+      }
+      
+      if (lineStyle === 'dashed') {
+        ctx.setLineDash([4, 4]);
+      } else if (lineStyle === 'dotted') {
+        const dotSize = ctx.lineWidth;
+        ctx.setLineDash([0, dotSize * 2]);
+        ctx.lineCap = 'round';
+      } else {
+        ctx.setLineDash([6, 3]);
+      }
+    } else {
+      // Fixed default style for points
+      ctx.globalAlpha = 1.0;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 3]);
+    }
+    
+    ctx.strokeStyle = theme.highlight;
+    ctx.beginPath();
+    ctx.arc(centerPoint.x, centerPoint.y, theme.selectionPointRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    if (theme.selectionPointStyleSameAsLine && lineStyle === 'dotted') {
+      ctx.lineCap = 'butt';
+    }
+    ctx.restore();
     
     // Kąt przy wierzchołku C (górny)
     const angleCenter = points[2];

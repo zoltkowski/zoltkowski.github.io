@@ -608,7 +608,7 @@
                   </div>
                 </div>
                 <div class="config-row">
-                  <label>Kolor obrysu:</label>
+                  <label>Kolor linii:</label>
                   <div style="display:flex; align-items:center; gap:8px;">
                     <input type="color" id="themeStrokeColor" class="color-input">
                     <input type="text" id="themeStrokeColorHex" class="color-hex" placeholder="#rrggbb" maxlength="7">
@@ -642,6 +642,18 @@
                     <button class="size-btn" data-action="decrease" data-target="highlightWidth">−</button>
                     <span class="size-value" id="themeHighlightWidthValue">3 px</span>
                     <button class="size-btn" data-action="increase" data-target="highlightWidth">+</button>
+                  </div>
+                </div>
+                <div class="config-row">
+                  <label>Styl punktu jak linii:</label>
+                  <input type="checkbox" id="themeSelectionPointStyleSameAsLine" style="width: 20px; height: 20px;">
+                </div>
+                <div class="config-row">
+                  <label>Promień zaznaczenia punktu:</label>
+                  <div class="size-control">
+                    <button class="size-btn" data-action="decrease" data-target="selectionPointRadius">−</button>
+                    <span class="size-value" id="themeSelectionPointRadiusValue">8 px</span>
+                    <button class="size-btn" data-action="increase" data-target="selectionPointRadius">+</button>
                   </div>
                 </div>
 
