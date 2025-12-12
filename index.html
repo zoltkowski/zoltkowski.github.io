@@ -505,15 +505,12 @@
           <div class="config-section">
             <div style="padding: 12px;">
               <h3>Domyślny folder</h3>
-              <p class="tab-description">Wybierz folder, w którym będą zapisywane pliki JSON i konfiguracja.</p>
-              <div style="display: flex; gap: 12px; margin-top: 16px; align-items: center;">
-                <button id="selectDefaultFolderBtn" class="icon-btn" title="Wybierz folder" style="padding: 10px 16px; font-size: 14px;">
-                  <svg class="icon" viewBox="0 0 24 24" style="width: 18px; height: 18px; margin-right: 6px;">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  Wybierz folder
+              <p class="tab-description">Wybierz folder, w którym będą zapisywane pliki.</p>
+              <div style="display: flex; gap: 8px; margin-top: 16px; align-items: center;">
+                <button id="selectDefaultFolderBtn" class="icon-btn" title="Wybierz folder" style="padding: 8px 12px; font-size: 16px; min-width: auto;">
+                  ...
                 </button>
-                <span id="defaultFolderPath" style="font-size: 13px; color: var(--fg-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <span id="defaultFolderPath" style="font-size: 13px; color: var(--fg-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 8px;">
                   Nie wybrano
                 </span>
                 <button id="clearDefaultFolderBtn" class="icon-btn" title="Wyczyść" style="padding: 8px; display: none;">
@@ -527,18 +524,17 @@
           <div class="config-section" style="margin-top: 16px;">
             <div style="padding: 12px;">
               <h3>Precyzja wymiarów</h3>
-              <p class="tab-description">Ustaw liczbę miejsc po przecinku dla wyświetlanych wymiarów.</p>
               <div style="display: flex; gap: 24px; margin-top: 16px;">
                 <div style="flex: 1;">
                   <label for="precisionLength" style="display: block; margin-bottom: 8px; font-size: 13px; color: var(--fg-secondary);">
-                    Długości (miejsca po przecinku):
+                    Długości:
                   </label>
                   <input type="number" id="precisionLength" min="0" max="5" value="0" 
                          style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg);">
                 </div>
                 <div style="flex: 1;">
                   <label for="precisionAngle" style="display: block; margin-bottom: 8px; font-size: 13px; color: var(--fg-secondary);">
-                    Kąty (miejsca po przecinku):
+                    Kątów:
                   </label>
                   <input type="number" id="precisionAngle" min="0" max="5" value="0"
                          style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg);">
@@ -549,7 +545,7 @@
           <div class="config-section" style="margin-top: 16px;">
             <div style="padding: 12px;">
               <h3>Eksport i Import</h3>
-              <p class="tab-description">Zapisz lub wczytaj pełną konfigurację aplikacji (przyciski, kolejność, ustawienia).</p>
+              <p class="tab-description">Zapisz lub wczytaj pełną konfigurację aplikacji.</p>
               <div style="display: flex; gap: 12px; margin-top: 16px;">
                 <button id="exportConfigBtn" class="icon-btn" title="Eksportuj konfigurację" style="padding: 10px 16px; font-size: 14px; flex: 1;">
                   <svg class="icon" viewBox="0 0 24 24" style="width: 18px; height: 18px; margin-right: 6px;">
