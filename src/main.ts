@@ -1309,6 +1309,102 @@ function nextGreek() {
   return { text: res, seq: { kind: 'greek' as const, idx } };
 }
 
+function parseSeqIndexFromText(text: string, alphabet: string): number | null {
+  if (!text) return null;
+  const base = alphabet.length;
+  let value = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const pos = alphabet.indexOf(ch);
+    if (pos < 0) return null;
+    value = value * base + (pos + 1);
+  }
+  return value - 1;
+}
+
+function labelOccupiesSeqIdx(label?: Label | FreeLabel): { kind: Label['seq']['kind']; idx: number } | null {
+  if (!label?.text) return null;
+  const seq = (label as any).seq as Label['seq'] | undefined;
+  if (seq) {
+    const expectedText =
+      seq.kind === 'upper'
+        ? seqLetter(seq.idx, UPPER_SEQ)
+        : seq.kind === 'lower'
+          ? seqLetter(seq.idx, LOWER_SEQ)
+          : GREEK_SEQ[seq.idx % GREEK_SEQ.length];
+
+    // If user edited the label text, don't keep reserving the old seq.idx.
+    if (label.text === expectedText) return { kind: seq.kind, idx: seq.idx };
+
+    if (seq.kind === 'upper') {
+      const parsed = /^[A-Z]+$/.test(label.text) ? parseSeqIndexFromText(label.text, UPPER_SEQ) : null;
+      return parsed === null ? null : { kind: 'upper', idx: parsed };
+    }
+    if (seq.kind === 'lower') {
+      const parsed = /^[a-z]+$/.test(label.text) ? parseSeqIndexFromText(label.text, LOWER_SEQ) : null;
+      return parsed === null ? null : { kind: 'lower', idx: parsed };
+    }
+    // greek: keep conservative (only reserve if it matches expected)
+    return null;
+  }
+
+  // Labels without seq can still reserve indices if they look like sequence labels.
+  if (/^[A-Z]+$/.test(label.text)) {
+    const parsed = parseSeqIndexFromText(label.text, UPPER_SEQ);
+    return parsed === null ? null : { kind: 'upper', idx: parsed };
+  }
+  if (/^[a-z]+$/.test(label.text)) {
+    const parsed = parseSeqIndexFromText(label.text, LOWER_SEQ);
+    return parsed === null ? null : { kind: 'lower', idx: parsed };
+  }
+  return null;
+}
+
+function refreshLabelPoolsFromModel(target: Model = model) {
+  const usedUpper = new Set<number>();
+  const usedLower = new Set<number>();
+  const usedGreek = new Set<number>();
+
+  const addUsed = (label?: Label | FreeLabel) => {
+    const occ = labelOccupiesSeqIdx(label);
+    if (!occ) return;
+    if (!Number.isFinite(occ.idx) || occ.idx < 0) return;
+    if (occ.kind === 'upper') usedUpper.add(occ.idx);
+    else if (occ.kind === 'lower') usedLower.add(occ.idx);
+    else usedGreek.add(occ.idx);
+  };
+
+  target.points.forEach((p) => addUsed(p.label));
+  target.lines.forEach((l) => addUsed(l.label));
+  target.circles.forEach((c) => addUsed(c.label));
+  target.angles.forEach((a) => addUsed(a.label));
+  target.labels.forEach((l) => addUsed(l));
+
+  const compute = (used: Set<number>) => {
+    if (used.size === 0) return { next: 0, free: [] as number[] };
+    let maxUsed = -1;
+    used.forEach((v) => {
+      if (v > maxUsed) maxUsed = v;
+    });
+    const free: number[] = [];
+    for (let i = 0; i <= maxUsed; i++) {
+      if (!used.has(i)) free.push(i);
+    }
+    return { next: maxUsed + 1, free };
+  };
+
+  const upper = compute(usedUpper);
+  const lower = compute(usedLower);
+  const greek = compute(usedGreek);
+
+  labelUpperIdx = upper.next;
+  labelLowerIdx = lower.next;
+  labelGreekIdx = greek.next;
+  freeUpperIdx = upper.free;
+  freeLowerIdx = lower.free;
+  freeGreekIdx = greek.free;
+}
+
 function clearSelectionState() {
   selectedLineIndex = null;
   selectedPointIndex = null;
@@ -1560,8 +1656,9 @@ function applyStyleToSelection(style: CopiedStyle) {
 }
 
 function reclaimLabel(label?: Label) {
-  if (!label?.seq) return;
-  const { kind, idx } = label.seq;
+  const occ = labelOccupiesSeqIdx(label);
+  if (!occ) return;
+  const { kind, idx } = occ;
   const pool = kind === 'upper' ? freeUpperIdx : kind === 'lower' ? freeLowerIdx : freeGreekIdx;
   if (!pool.includes(idx)) {
     pool.push(idx);
@@ -13236,6 +13333,7 @@ function recomputePerpendicularLine(lineIdx: number) {
 }
 
 function pushHistory() {
+  refreshLabelPoolsFromModel();
   rebuildIndexMaps();
   const snapshot: Snapshot = {
     model: deepClone(model),
@@ -13268,6 +13366,7 @@ function deepClone<T>(obj: T): T {
 }
 
 function serializeCurrentDocument(): PersistedDocument {
+  refreshLabelPoolsFromModel();
   rebuildIndexMaps();
   const pointData = model.points.map((point) => {
     const { incident_objects, recompute: _r, on_parent_deleted: _d, ...rest } = point;
