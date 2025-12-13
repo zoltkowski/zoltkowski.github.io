@@ -3,7 +3,8 @@ import path from 'path';
 
 const projectRoot = process.cwd();
 const contentDir = path.join(projectRoot, 'public', 'content');
-const outputFile = path.join(contentDir, 'index.json');
+const manifestName = 'index.json';
+const outputFile = path.join(contentDir, manifestName);
 
 async function ensureContentDir() {
   try {
@@ -22,6 +23,7 @@ async function collectJsonFiles() {
   const entries = await fs.readdir(contentDir, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.json'))
+    .filter((entry) => entry.name.toLowerCase() !== manifestName)
     .map((entry) => entry.name)
     .sort((a, b) => a.localeCompare(b, 'pl'));
 }

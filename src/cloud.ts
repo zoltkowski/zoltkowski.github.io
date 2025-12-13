@@ -174,6 +174,7 @@ export async function saveToKV(key: string, data: any): Promise<void> {
 
 // === BIBLIOTEKA (content folder) ===
 const LIBRARY_MANIFEST_URL = '/content/index.json';
+const LIBRARY_MANIFEST_FILENAME = 'index.json';
 
 async function fetchLibraryManifest(): Promise<string[] | null> {
   try {
@@ -185,7 +186,10 @@ async function fetchLibraryManifest(): Promise<string[] | null> {
     if (Array.isArray(data)) {
       return data
         .map(name => (typeof name === 'string' ? name.trim() : ''))
-        .filter(name => !!name && name.toLowerCase().endsWith('.json'));
+        .filter(name => {
+          if (!name || !name.toLowerCase().endsWith('.json')) return false;
+          return name.toLowerCase() !== LIBRARY_MANIFEST_FILENAME;
+        });
     }
     return null;
   } catch (err) {
@@ -215,7 +219,7 @@ export async function listLibraryFiles(): Promise<string[]> {
       const href = match[1];
       const decoded = decodeURIComponent(href);
       const filename = decoded.split('/').pop() ?? decoded;
-      if (filename.endsWith('.json')) {
+      if (filename.endsWith('.json') && filename.toLowerCase() !== LIBRARY_MANIFEST_FILENAME) {
         files.add(filename);
       }
     }

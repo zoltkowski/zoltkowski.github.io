@@ -1064,6 +1064,7 @@ let draggingLabel:
 let draggingCircleCenterAngles: Map<number, Map<number, number>> | null = null;
 let circleThreePoints: number[] = [];
 let activeAxisSnap: { lineIdx: number; axis: 'horizontal' | 'vertical'; strength: number } | null = null;
+let updatePromptEl: HTMLElement | null = null;
 const ICONS = {
   moveSelect:
     '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 9.5 5.5 12 8l2.5-2.5L12 3Zm0 13-2.5 2.5L12 21l2.5-2.5L12 16Zm-9-4 2.5 2.5L8 12 5.5 9.5 3 12Zm13 0 2.5 2.5L21 12l-2.5-2.5L16 12ZM8 12l8 0" /></svg>',
@@ -15887,6 +15888,86 @@ loadButtonOrder();
 loadButtonConfiguration();
 // applyButtonConfiguration() is called in initRuntime() after DOM is ready
 
+function showUpdatePrompt(message = 'Dostępna jest nowa wersja. Kliknij, aby odświeżyć aplikację.') {
+  if (updatePromptEl) {
+    const textNode = updatePromptEl.querySelector('.update-banner__text');
+    if (textNode) textNode.textContent = message;
+    updatePromptEl.classList.add('update-banner--visible');
+    return;
+  }
+  
+  if (!document.body) return;
+  
+  const banner = document.createElement('div');
+  banner.className = 'update-banner update-banner--visible';
+  banner.style.cssText = `
+    position:fixed;
+    bottom:16px;
+    right:16px;
+    z-index:9999;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:12px 16px;
+    border-radius:999px;
+    background:rgba(17,24,39,0.95);
+    color:#fff;
+    box-shadow:0 10px 30px rgba(0,0,0,0.35);
+    font-size:14px;
+    line-height:1.4;
+    max-width:90vw;
+  `;
+  
+  const textSpan = document.createElement('span');
+  textSpan.className = 'update-banner__text';
+  textSpan.textContent = message;
+  textSpan.style.flex = '1';
+  banner.appendChild(textSpan);
+  
+  const reloadBtn = document.createElement('button');
+  reloadBtn.type = 'button';
+  reloadBtn.textContent = 'Odśwież';
+  reloadBtn.style.cssText = `
+    background:#3b82f6;
+    color:#fff;
+    border:none;
+    border-radius:999px;
+    padding:6px 14px;
+    font-weight:600;
+    cursor:pointer;
+  `;
+  reloadBtn.addEventListener('click', () => {
+    reloadBtn.disabled = true;
+    reloadBtn.textContent = 'Ładowanie...';
+    window.location.reload();
+  });
+  banner.appendChild(reloadBtn);
+  
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.textContent = '×';
+  closeBtn.setAttribute('aria-label', 'Zamknij');
+  closeBtn.style.cssText = `
+    background:transparent;
+    border:none;
+    color:inherit;
+    font-size:18px;
+    line-height:1;
+    cursor:pointer;
+  `;
+  closeBtn.addEventListener('click', () => {
+    banner.classList.remove('update-banner--visible');
+    banner.style.opacity = '0';
+    banner.style.pointerEvents = 'none';
+    setTimeout(() => banner.remove(), 300);
+    updatePromptEl = null;
+  });
+  banner.appendChild(closeBtn);
+  
+  document.body.appendChild(banner);
+  updatePromptEl = banner;
+}
+
 // Rejestracja service workera
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
@@ -15895,7 +15976,16 @@ if ('serviceWorker' in navigator) {
       
       navigator.serviceWorker.addEventListener('message', (e) => {
         if (e.data?.type === 'SW_ACTIVATED') {
-          window.location.reload();
+          if (navigator.onLine) {
+            showUpdatePrompt();
+          } else {
+            showUpdatePrompt('Dostępna jest nowa wersja. Gdy wróci internet, kliknij Odśwież.');
+            const onceOnline = () => {
+              window.removeEventListener('online', onceOnline);
+              showUpdatePrompt();
+            };
+            window.addEventListener('online', onceOnline);
+          }
         }
       });
     } catch (err) {
