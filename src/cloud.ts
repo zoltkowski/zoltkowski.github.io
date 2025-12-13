@@ -17,6 +17,7 @@ let cloudPanelPos: { x: number; y: number } | null = null;
 let lastLoadedFile: { name: string; type: 'local' | 'library' | 'cloud' } | null = null;
 let isCollapsedState = false;
 let localDirectoryHandle: FileSystemDirectoryHandle | null = null;
+let cloudLocalLoadCallback: ((data: any) => void) | null = null;
 
 type DragState = {
   pointerId: number;
@@ -24,6 +25,17 @@ type DragState = {
   panelStart: { x: number; y: number };
 };
 let cloudDragState: DragState | null = null;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('default-folder-changed', (event) => {
+    const detail = (event as CustomEvent<{ handle: FileSystemDirectoryHandle | null }>).detail;
+    const nextHandle = detail?.handle ?? null;
+    localDirectoryHandle = nextHandle;
+    if (currentTab === 'local' && cloudLocalLoadCallback) {
+      loadLocalList(cloudLocalLoadCallback);
+    }
+  });
+}
 
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
@@ -102,14 +114,19 @@ async function loadLocalDirectoryHandle(): Promise<FileSystemDirectoryHandle | n
   }
 }
 
-async function verifyPermission(handle: FileSystemDirectoryHandle): Promise<boolean> {
+type FileSystemPermissionMode = 'read' | 'readwrite';
+
+async function verifyPermission(
+  handle: FileSystemDirectoryHandle,
+  mode: FileSystemPermissionMode = 'read'
+): Promise<boolean> {
   try {
     // @ts-ignore
-    const permission = await handle.queryPermission({ mode: 'read' });
+    const permission = await handle.queryPermission({ mode });
     if (permission === 'granted') return true;
     
     // @ts-ignore
-    const requestPermission = await handle.requestPermission({ mode: 'read' });
+    const requestPermission = await handle.requestPermission({ mode });
     return requestPermission === 'granted';
   } catch (err) {
     console.error('Permission verification failed:', err);
@@ -432,6 +449,8 @@ export function initCloudUI(onLoadCallback: (data: any) => void) {
     return;
   }
   
+  cloudLocalLoadCallback = onLoadCallback;
+  
   // Reset do stanu rozwiniętego
   isCollapsedState = false;
   const panelContent = document.querySelector('#cloudPanel .debug-panel__content') as HTMLElement;
@@ -678,7 +697,52 @@ async function loadLocalList(onLoadCallback: (data: any) => void) {
         }
       });
       
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'cloud-file-item__btn cloud-file-item__btn--delete';
+      deleteBtn.title = 'Usuń';
+      deleteBtn.innerHTML = `
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 6h14"/>
+          <path d="M10 10v8"/>
+          <path d="M14 10v8"/>
+          <path d="M7 6 8 4h8l1 2"/>
+          <path d="M6 6v14h12V6"/>
+        </svg>
+      `;
+      deleteBtn.addEventListener('click', async () => {
+        if (!localDirectoryHandle) {
+          alert('Brak dostępu do folderu.');
+          return;
+        }
+        if (!confirm(`Czy na pewno chcesz usunąć plik "${name}" z folderu?`)) {
+          return;
+        }
+        try {
+          const hasWritePermission = await verifyPermission(localDirectoryHandle, 'readwrite');
+          if (!hasWritePermission) {
+            alert('Brak uprawnień do edycji folderu.');
+            return;
+          }
+          const dirHandle = localDirectoryHandle as FileSystemDirectoryHandle & {
+            removeEntry?: (entryName: string) => Promise<void>;
+          };
+          if (typeof dirHandle.removeEntry !== 'function') {
+            alert('Usuwanie plików jest niedostępne w tej przeglądarce.');
+            return;
+          }
+          await dirHandle.removeEntry(name);
+          if (lastLoadedFile?.type === 'local' && lastLoadedFile.name === name) {
+            lastLoadedFile = null;
+          }
+          await loadLocalList(onLoadCallback);
+        } catch (err) {
+          console.error('Nie udało się usunąć pliku lokalnego:', err);
+          alert('Nie udało się usunąć pliku lokalnego.');
+        }
+      });
+      
       actions.appendChild(loadBtn);
+      actions.appendChild(deleteBtn);
       item.appendChild(actions);
       
       fileListContainer.appendChild(item);

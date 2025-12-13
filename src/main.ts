@@ -976,10 +976,20 @@ export async function saveDefaultFolderHandle(handle: FileSystemDirectoryHandle 
       localStorage.removeItem('defaultFolderName');
     }
     
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
     });
+    
+    defaultFolderHandle = handle;
+    updateDefaultFolderDisplay();
+    
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('default-folder-changed', {
+        detail: { handle }
+      });
+      window.dispatchEvent(event);
+    }
   } catch (err) {
     console.error('Failed to save folder handle to IndexedDB:', err);
   }
@@ -8824,7 +8834,44 @@ function initRuntime() {
     exportButtonConfiguration();
   });
   
-  importConfigBtn?.addEventListener('click', () => {
+  importConfigBtn?.addEventListener('click', async () => {
+    if ('showOpenFilePicker' in window) {
+      try {
+        // @ts-ignore
+        const pickerOpts: OpenFilePickerOptions = {
+          multiple: false,
+          types: [
+            {
+              description: 'JSON File',
+              accept: { 'application/json': ['.json'] }
+            }
+          ]
+        };
+        if (defaultFolderHandle) {
+          const hasPermission = await ensureFolderPermission(defaultFolderHandle);
+          if (hasPermission) {
+            // @ts-ignore
+            pickerOpts.startIn = defaultFolderHandle;
+          } else {
+            defaultFolderHandle = null;
+            await saveDefaultFolderHandle(null);
+            updateDefaultFolderDisplay();
+          }
+        }
+        // @ts-ignore
+        const [fileHandle] = await (window as any).showOpenFilePicker(pickerOpts);
+        if (fileHandle) {
+          const file = await fileHandle.getFile();
+          const content = await file.text();
+          const success = importButtonConfiguration(content);
+          showImportFeedback(success);
+        }
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+        console.warn('Import config via picker failed, falling back:', err);
+      }
+    }
     importConfigInput?.click();
   });
   
@@ -9952,7 +9999,45 @@ function initRuntime() {
       window.alert('Nie udało się przygotować pliku JSON.');
     }
   });
-  importJsonBtn?.addEventListener('click', () => {
+  importJsonBtn?.addEventListener('click', async () => {
+    if ('showOpenFilePicker' in window) {
+      try {
+        // @ts-ignore
+        const pickerOpts: OpenFilePickerOptions = {
+          multiple: false,
+          types: [
+            {
+              description: 'JSON File',
+              accept: { 'application/json': ['.json'] }
+            }
+          ]
+        };
+        if (defaultFolderHandle) {
+          const hasPermission = await ensureFolderPermission(defaultFolderHandle);
+          if (hasPermission) {
+            // @ts-ignore
+            pickerOpts.startIn = defaultFolderHandle;
+          } else {
+            defaultFolderHandle = null;
+            await saveDefaultFolderHandle(null);
+            updateDefaultFolderDisplay();
+          }
+        }
+        // @ts-ignore
+        const [fileHandle] = await (window as any).showOpenFilePicker(pickerOpts);
+        if (fileHandle) {
+          const file = await fileHandle.getFile();
+          const text = await file.text();
+          const parsed = JSON.parse(text) as unknown;
+          applyPersistedDocument(parsed);
+          closeZoomMenu();
+        }
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+        console.warn('Import JSON via picker failed, falling back:', err);
+      }
+    }
     if (!importJsonInput) return;
     importJsonInput.value = '';
     importJsonInput.click();
