@@ -267,6 +267,9 @@ export function initCloudPanel() {
   
   // Event delegation dla przycisków toggle
   cloudPanel.addEventListener('click', (e: MouseEvent) => {
+    const panel = cloudPanel;
+    if (!panel) return;
+
     const target = e.target as HTMLElement;
     
     // Sprawdź czy kliknięto w toggle button lub jego dzieci (SVG)
@@ -295,31 +298,32 @@ export function initCloudPanel() {
         panelTitle.style.display = '';
         panelTitle.style.pointerEvents = '';
       }
-      const closeBtn = cloudPanel.querySelector('.debug-panel__close') as HTMLElement;
+      const closeBtn = panel.querySelector('.debug-panel__close') as HTMLElement;
       if (closeBtn) closeBtn.style.pointerEvents = '';
       if (toolbarHeader) {
         const toolbar = toolbarHeader.querySelector('.cloud-toolbar');
         // Sprawdź która zakładka jest aktywna
-        const tabLocal = cloudPanel.querySelector('[data-tab="local"]');
-        const tabLibrary = cloudPanel.querySelector('[data-tab="library"]');
-        const tabCloud = cloudPanel.querySelector('[data-tab="cloud"]');
+        const tabLocal = panel.querySelector('[data-tab="local"]');
+        const tabLibrary = panel.querySelector('[data-tab="library"]');
+        const tabCloud = panel.querySelector('[data-tab="cloud"]');
         const isLocalActive = tabLocal?.classList.contains('cloud-tab--active');
         const isLibraryActive = tabLibrary?.classList.contains('cloud-tab--active');
         const targetList = isLocalActive ? localFileList : (isLibraryActive ? libraryFileList : cloudFileList);
         
         if (toolbar && targetList) {
           // Jeśli lista jest pusta lub pierwszy element to już toolbar, użyj appendChild
-          if (!targetList.firstChild || targetList.firstChild.classList?.contains('cloud-toolbar')) {
+          const firstElement = targetList.firstElementChild;
+          if (!firstElement || firstElement.classList.contains('cloud-toolbar')) {
             targetList.appendChild(toolbar);
           } else {
-            targetList.insertBefore(toolbar, targetList.firstChild);
+            targetList.insertBefore(toolbar, firstElement);
           }
         }
         toolbarHeader.style.display = 'none';
       }
-      const refreshBtn = cloudPanel.querySelector('.cloud-toolbar button:nth-child(4)') as HTMLElement;
+      const refreshBtn = panel.querySelector('.cloud-toolbar button:nth-child(4)') as HTMLElement;
       if (refreshBtn) refreshBtn.style.display = '';
-      const toolbar = cloudPanel.querySelector('.cloud-toolbar') as HTMLElement;
+      const toolbar = panel.querySelector('.cloud-toolbar') as HTMLElement;
       if (toolbar) toolbar.style.borderBottom = '';
       isCollapsedState = false;
       toggleBtn.innerHTML = `<svg class="icon" viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></svg>`;
@@ -330,12 +334,12 @@ export function initCloudPanel() {
         panelTitle.style.display = 'none';
         panelTitle.style.pointerEvents = 'none';
       }
-      const closeBtn = cloudPanel.querySelector('.debug-panel__close') as HTMLElement;
+      const closeBtn = panel.querySelector('.debug-panel__close') as HTMLElement;
       if (closeBtn) closeBtn.style.pointerEvents = 'none';
       if (toolbarHeader) {
         // Znajdź toolbar z AKTYWNEJ listy, nie pierwszy w DOM
-        const tabLocal = cloudPanel.querySelector('[data-tab="local"]');
-        const tabLibrary = cloudPanel.querySelector('[data-tab="library"]');
+        const tabLocal = panel.querySelector('[data-tab="local"]');
+        const tabLibrary = panel.querySelector('[data-tab="library"]');
         const isLocalActive = tabLocal?.classList.contains('cloud-tab--active');
         const isLibraryActive = tabLibrary?.classList.contains('cloud-tab--active');
         const activeList = isLocalActive ? localFileList : (isLibraryActive ? libraryFileList : cloudFileList);
@@ -350,9 +354,9 @@ export function initCloudPanel() {
           });
         }
       }
-      const refreshBtn = cloudPanel.querySelector('.cloud-toolbar button:nth-child(4)') as HTMLElement;
+      const refreshBtn = panel.querySelector('.cloud-toolbar button:nth-child(4)') as HTMLElement;
       if (refreshBtn) refreshBtn.style.display = 'none';
-      const toolbar = cloudPanel.querySelector('.cloud-toolbar') as HTMLElement;
+      const toolbar = panel.querySelector('.cloud-toolbar') as HTMLElement;
       if (toolbar) toolbar.style.borderBottom = 'none';
       isCollapsedState = true;
       toggleBtn.innerHTML = `<svg class="icon" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>`;
@@ -514,7 +518,7 @@ async function loadLocalList(onLoadCallback: (data: any) => void) {
     // @ts-ignore
     for await (const entry of localDirectoryHandle.values()) {
       if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.json')) {
-        files.push({ name: entry.name, handle: entry });
+        files.push({ name: entry.name, handle: entry as FileSystemFileHandle });
       }
     }
     
@@ -622,9 +626,8 @@ async function loadLocalList(onLoadCallback: (data: any) => void) {
     
     // Obsługa nawigacji
     const navigateFile = (direction: number) => {
-      const currentIndex = lastLoadedFile?.type === 'local' 
-        ? files.findIndex(f => f.name === lastLoadedFile.name) 
-        : -1;
+      const activeName = lastLoadedFile && lastLoadedFile.type === 'local' ? lastLoadedFile.name : null;
+      const currentIndex = activeName ? files.findIndex(f => f.name === activeName) : -1;
       const newIndex = currentIndex + direction;
       
       if (newIndex >= 0 && newIndex < files.length) {
